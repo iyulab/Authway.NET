@@ -1,0 +1,35 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+publish/
+artifacts/
+TestResults/
+*.nupkg
+*.snupkg
+
+# IDE / tooling
+.vs/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.user
+*.suo
+*.DotSettings.user
+
+# Local configuration and secrets — never committed
+appsettings.Local.json
+appsettings.*.Local.json
+*.pfx
+*.key
+secrets.json
+.env
+.env.*
+!.env.example
+
+# Process notes live outside this repository
+claudedocs/
+
+# OS
+.DS_Store
+Thumbs.db
