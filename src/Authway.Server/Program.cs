@@ -1,4 +1,5 @@
 using Authway.Data;
+using Authway.Server;
 using Authway.Data.Postgres;
 using Authway.Data.SqlServer;
 using Microsoft.AspNetCore.Identity;
@@ -53,6 +54,10 @@ builder.Services.AddOpenIddict()
 
         options.RegisterScopes(Scopes.Email, Scopes.Profile, Scopes.OfflineAccess);
 
+        // Access tokens are signed JWTs a resource server reads with the published keys (the
+        // contract's JwtAccessToken), not tokens only this server can open.
+        options.DisableAccessTokenEncryption();
+
         // S256 only: a challenge sent as itself proves nothing to anyone who saw the request.
         options.Configure(server => server.CodeChallengeMethods.Remove(CodeChallengeMethods.Plain));
 
@@ -80,6 +85,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "authway" }));
+
+app.MapPost("/connect/token", TokenEndpoint.HandleAsync).DisableAntiforgery();
 
 app.Run();
 
