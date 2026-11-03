@@ -13,6 +13,9 @@ public interface IServerFixture
 {
     HttpClient Client { get; }
 
+    /// <summary>A client of its own: with a browser's cookies, and following redirects or not as the test needs.</summary>
+    HttpClient CreateClient(bool followRedirects);
+
     IServiceProvider Services { get; }
 }
 
@@ -29,6 +32,9 @@ public abstract class ServerFixture : IAsyncLifetime, IServerFixture
     protected abstract string ConnectionString { get; }
 
     public HttpClient Client => _factory!.CreateClient();
+
+    public HttpClient CreateClient(bool followRedirects) =>
+        _factory!.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = followRedirects, HandleCookies = true });
 
     public IServiceProvider Services => _factory!.Services;
 

@@ -1,5 +1,6 @@
 using Authway.Data;
 using Authway.Server;
+using Authway.Server.Flows;
 using Authway.Data.Postgres;
 using Authway.Data.SqlServer;
 using Microsoft.AspNetCore.Identity;
@@ -36,6 +37,30 @@ builder.Services
     })
     .AddEntityFrameworkStores<AuthwayDbContext>()
     .AddDefaultTokenProviders();
+
+// The cookie is the session: it answers 401 to a caller that is not signed in rather than
+// sending it to a page, since the sign-in screen is reached by the flow, not by a redirect.
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Cookie.Name = "authway_session";
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+    options.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return Task.CompletedTask;
+    };
+});
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower);
+
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<IFlowStore, MemoryFlowStore>();
 
 builder.Services.AddAuthorization();
 
@@ -86,7 +111,10 @@ app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "authway" }));
 
+app.MapMethods("/connect/authorize", [HttpMethods.Get, HttpMethods.Post], AuthorizationEndpoint.HandleAsync).DisableAntiforgery();
 app.MapPost("/connect/token", TokenEndpoint.HandleAsync).DisableAntiforgery();
+
+LoginFlowEndpoints.Map(app);
 
 app.Run();
 

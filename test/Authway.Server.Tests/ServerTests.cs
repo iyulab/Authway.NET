@@ -11,7 +11,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace Authway.Server.Tests;
 
 /// <summary>What the server must do on every database an installation can run on.</summary>
-public abstract class ServerTests(IServerFixture server)
+public abstract partial class ServerTests(IServerFixture server)
 {
     [Fact]
     public async Task Discovery_AnnouncesTheEndpointsAndTheKeys()
