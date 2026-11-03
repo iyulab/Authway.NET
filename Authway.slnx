@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Authway.Data.Postgres/Authway.Data.Postgres.csproj" />
+    <Project Path="src/Authway.Data.SqlServer/Authway.Data.SqlServer.csproj" />
+    <Project Path="src/Authway.Data/Authway.Data.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/Authway.Data.Tests/Authway.Data.Tests.csproj" />
+  </Folder>
+</Solution>

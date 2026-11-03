@@ -38,3 +38,11 @@ dotnet_naming_symbols.private_fields.applicable_kinds = field
 dotnet_naming_symbols.private_fields.applicable_accessibilities = private
 dotnet_naming_style.underscore_camel.required_prefix = _
 dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+# EF Core generates these; they are not edited by hand
+[**/Migrations/*.cs]
+generated_code = true
+
+[test/**.cs]
+# Test names read as sentences.
+dotnet_diagnostic.CA1707.severity = none
