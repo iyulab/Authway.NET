@@ -113,8 +113,11 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "authway" 
 
 app.MapMethods("/connect/authorize", [HttpMethods.Get, HttpMethods.Post], AuthorizationEndpoint.HandleAsync).DisableAntiforgery();
 app.MapPost("/connect/token", TokenEndpoint.HandleAsync).DisableAntiforgery();
+app.MapMethods("/connect/userinfo", [HttpMethods.Get, HttpMethods.Post], UserInfoEndpoint.HandleAsync).DisableAntiforgery();
+app.MapMethods("/connect/logout", [HttpMethods.Get, HttpMethods.Post], EndSessionEndpoint.HandleAsync).DisableAntiforgery();
 
 LoginFlowEndpoints.Map(app);
+LogoutFlowEndpoints.Map(app);
 
 app.Run();
 

@@ -16,15 +16,15 @@ public class MemoryFlowStoreTests
         public void Advance(TimeSpan by) => _now += by;
     }
 
-    private static LoginFlow Open(MemoryFlowStore store) =>
-        store.Open("app", "An application", ["openid"], "/connect/authorize?client_id=app", NoHints);
+    private static Flow Open(MemoryFlowStore store, FlowKind kind = FlowKind.Login) =>
+        store.Open(kind, "app", "An application", ["openid"], "/connect/authorize?client_id=app", NoHints);
 
     [Fact]
     public void AnIdNobodyOpened_IsUnknown()
     {
         var store = new MemoryFlowStore(new Clock());
 
-        Assert.Equal(FlowState.Unknown, store.Find("nothing", out var flow));
+        Assert.Equal(FlowState.Unknown, store.Find("nothing", FlowKind.Login, out var flow));
         Assert.Null(flow);
     }
 
@@ -35,14 +35,14 @@ public class MemoryFlowStoreTests
         var store = new MemoryFlowStore(clock);
         var opened = Open(store);
 
-        Assert.Equal(FlowState.Open, store.Find(opened.Id, out var found));
+        Assert.Equal(FlowState.Open, store.Find(opened.Id, FlowKind.Login, out var found));
         Assert.Equal(opened, found);
 
         clock.Advance(MemoryFlowStore.Lifetime - TimeSpan.FromSeconds(1));
-        Assert.Equal(FlowState.Open, store.Find(opened.Id, out _));
+        Assert.Equal(FlowState.Open, store.Find(opened.Id, FlowKind.Login, out _));
 
         clock.Advance(TimeSpan.FromSeconds(1));
-        Assert.Equal(FlowState.Expired, store.Find(opened.Id, out found));
+        Assert.Equal(FlowState.Expired, store.Find(opened.Id, FlowKind.Login, out found));
         Assert.Null(found);
     }
 
@@ -54,7 +54,7 @@ public class MemoryFlowStoreTests
 
         store.Complete(opened.Id);
 
-        Assert.Equal(FlowState.Expired, store.Find(opened.Id, out _));
+        Assert.Equal(FlowState.Expired, store.Find(opened.Id, FlowKind.Login, out _));
     }
 
     [Fact]
@@ -67,11 +67,21 @@ public class MemoryFlowStoreTests
 
         clock.Advance(MemoryFlowStore.Lifetime + TimeSpan.FromMinutes(30));
         Open(store);
-        Assert.Equal(FlowState.Expired, store.Find(ended.Id, out _));
+        Assert.Equal(FlowState.Expired, store.Find(ended.Id, FlowKind.Login, out _));
 
         clock.Advance(TimeSpan.FromHours(1));
         Open(store);
-        Assert.Equal(FlowState.Unknown, store.Find(ended.Id, out _));
+        Assert.Equal(FlowState.Unknown, store.Find(ended.Id, FlowKind.Login, out _));
+    }
+
+    [Fact]
+    public void AFlowIsOnlyTheKindOfFlowItWasOpenedAs()
+    {
+        var store = new MemoryFlowStore(new Clock());
+        var signingOut = Open(store, FlowKind.Logout);
+
+        Assert.Equal(FlowState.Unknown, store.Find(signingOut.Id, FlowKind.Login, out _));
+        Assert.Equal(FlowState.Open, store.Find(signingOut.Id, FlowKind.Logout, out _));
     }
 
     [Fact]

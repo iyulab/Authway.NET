@@ -26,7 +26,8 @@ internal static class AuthorizationEndpoint
         HttpContext context,
         IOpenIddictApplicationManager applications,
         UserManager<ApplicationUser> users,
-        IFlowStore flows)
+        IFlowStore flows,
+        TimeProvider time)
     {
         var request = context.GetOpenIddictServerRequest()
             ?? throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
@@ -34,9 +35,16 @@ internal static class AuthorizationEndpoint
             ?? throw new InvalidOperationException("The application details cannot be found.");
 
         var session = await context.AuthenticateAsync(IdentityConstants.ApplicationScheme);
-        var signInAgain = request.HasPromptValue(PromptValues.Login);
+        var authenticatedAt = AuthTime.Of(session);
 
-        if (!session.Succeeded || signInAgain)
+        // The application can ask for a sign-in that is not an old one: always (prompt=login), or
+        // no older than so many seconds (max_age; 0 is the same as always). A session that is
+        // older than that is not the answer, however valid it still is. The age is counted in
+        // whole seconds, so that a sign-in a moment ago is not too old for max_age=0.
+        var signInAgain = request.HasPromptValue(PromptValues.Login)
+            || (request.MaxAge is { } maxAge && authenticatedAt is { } at && (long)(time.GetUtcNow() - at).TotalSeconds > maxAge);
+
+        if (authenticatedAt is null || signInAgain)
         {
             if (request.HasPromptValue(PromptValues.None))
             {
@@ -44,6 +52,7 @@ internal static class AuthorizationEndpoint
             }
 
             var flow = flows.Open(
+                FlowKind.Login,
                 request.ClientId!,
                 await applications.GetDisplayNameAsync(application) ?? request.ClientId!,
                 request.GetScopes(),
@@ -65,7 +74,7 @@ internal static class AuthorizationEndpoint
         }
 
         return Results.SignIn(
-            new ClaimsPrincipal(Identities.Of(user, request.GetScopes())),
+            new ClaimsPrincipal(Identities.Of(user, request.GetScopes(), authenticatedAt.Value)),
             authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 

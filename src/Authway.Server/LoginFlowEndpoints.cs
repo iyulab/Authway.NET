@@ -27,18 +27,19 @@ internal static class LoginFlowEndpoints
 
     private static async Task<IResult> GetAsync(string flow, HttpContext context, IFlowStore store)
     {
-        var state = store.Find(flow, out var open);
+        var state = store.Find(flow, FlowKind.Login, out var open);
         if (state != FlowState.Open)
         {
             return state == FlowState.Unknown ? Problems.UnknownFlow() : Problems.ExpiredFlow();
         }
 
         // A session that began since the flow did (in another tab) is all the flow was waiting for.
+        // One that was there before it is not: the application asked to be shown a sign-in.
         var session = await context.AuthenticateAsync(IdentityConstants.ApplicationScheme);
-        if (session.Succeeded)
+        if (AuthTime.Of(session) is { } signedInAt && signedInAt >= open!.OpenedAt)
         {
             store.Complete(flow);
-            return Results.Json(new Redirect("redirect", open!.ResumeUrl), LoginFlowJson.Options);
+            return Results.Json(new Redirect("redirect", open!.ContinueTo), LoginFlowJson.Options);
         }
 
         return Results.Json(new LoginForm(
@@ -55,9 +56,11 @@ internal static class LoginFlowEndpoints
         PasswordRequest? body,
         IFlowStore store,
         UserManager<ApplicationUser> users,
-        SignInManager<ApplicationUser> signIn)
+        SignInManager<ApplicationUser> signIn,
+        IPasswordHasher<ApplicationUser> hasher,
+        TimeProvider time)
     {
-        var state = store.Find(flow, out var open);
+        var state = store.Find(flow, FlowKind.Login, out var open);
         if (state != FlowState.Open)
         {
             return state == FlowState.Unknown ? Problems.UnknownFlow() : Problems.ExpiredFlow();
@@ -69,9 +72,11 @@ internal static class LoginFlowEndpoints
         }
 
         // An unknown address and a wrong password get the same answer, so the answer does not say who has an account.
+        // Nor does the time it takes: an address with no account gets a password check of the same cost.
         var user = await users.FindByEmailAsync(body.Email.Trim());
         if (user is null)
         {
+            hasher.VerifyHashedPassword(NoAccount, NoAccountHash.Value(hasher), body.Password);
             return InvalidCredentials();
         }
 
@@ -81,15 +86,26 @@ internal static class LoginFlowEndpoints
             return InvalidCredentials();
         }
 
-        await signIn.SignInAsync(user, isPersistent: body.Remember);
+        await signIn.SignInAsync(user, AuthTime.Of(body.Remember, time.GetUtcNow()));
         store.Complete(flow);
-        return Results.Json(new Redirect("redirect", open!.ResumeUrl), LoginFlowJson.Options);
+        return Results.Json(new Redirect("redirect", open!.ContinueTo), LoginFlowJson.Options);
+    }
+
+    private static readonly ApplicationUser NoAccount = new();
+
+    /// <summary>A hash of a password nobody knows, made with the hasher the accounts use so that checking against it costs the same.</summary>
+    private static class NoAccountHash
+    {
+        private static string? _hash;
+
+        public static string Value(IPasswordHasher<ApplicationUser> hasher) =>
+            _hash ??= hasher.HashPassword(NoAccount, Guid.NewGuid().ToString("N"));
     }
 
     private static IResult InvalidCredentials() =>
         Problems.Refuse(StatusCodes.Status401Unauthorized, "invalid_credentials", "The email address or the password is not right.");
 
-    private static LoginFormHints? HintsOf(LoginFlow flow)
+    private static LoginFormHints? HintsOf(Flow flow)
     {
         var hints = flow.Hints;
         if (hints.SignInMethod is null && hints.LoginHint is null && hints.UiLocales.Count == 0)

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using Authway.Data;
 using OpenIddict.Abstractions;
@@ -14,13 +15,14 @@ internal static class Identities
     /// for. The access token says who and how to reach them; the ID token says
     /// what the application asked about them (<c>email</c>, <c>profile</c>).
     /// </summary>
-    public static ClaimsIdentity Of(ApplicationUser user, IEnumerable<string> scopes)
+    public static ClaimsIdentity Of(ApplicationUser user, IEnumerable<string> scopes, DateTimeOffset authenticatedAt)
     {
         var identity = new ClaimsIdentity(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme, Claims.Name, Claims.Role);
         identity.SetClaim(Claims.Subject, user.Id.ToString());
         identity.SetClaim(Claims.Email, user.Email);
         identity.SetClaim(Claims.EmailVerified, user.EmailConfirmed);
         identity.SetClaim(Claims.Name, user.DisplayName ?? user.Email);
+        identity.AddClaim(new Claim(Claims.AuthenticationTime, authenticatedAt.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
         identity.SetScopes(scopes);
         identity.SetDestinations(DestinationsOf);
         return identity;
@@ -33,6 +35,9 @@ internal static class Identities
         {
             case Claims.Subject:
                 yield return Destinations.AccessToken;
+                yield return Destinations.IdentityToken;
+                break;
+            case Claims.AuthenticationTime:
                 yield return Destinations.IdentityToken;
                 break;
             case Claims.Email:

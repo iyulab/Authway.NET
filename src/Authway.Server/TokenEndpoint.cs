@@ -60,9 +60,13 @@ internal static class TokenEndpoint
         }
 
         // What the tokens say is read again, so that a change to the account (its name, its
-        // address) reaches the tokens a refresh token issues; the scopes stay what was granted.
+        // address) reaches the tokens a refresh token issues; the scopes stay what was granted,
+        // and the time of the sign-in stays the time the person signed in.
+        var signedInAt = long.TryParse(principal.GetClaim(Claims.AuthenticationTime), out var seconds)
+            ? DateTimeOffset.FromUnixTimeSeconds(seconds)
+            : DateTimeOffset.UtcNow;
         return Results.SignIn(
-            new ClaimsPrincipal(Identities.Of(user, principal.GetScopes())),
+            new ClaimsPrincipal(Identities.Of(user, principal.GetScopes(), signedInAt)),
             authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 

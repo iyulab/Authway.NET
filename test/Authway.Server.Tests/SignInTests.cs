@@ -128,6 +128,7 @@ public abstract partial class ServerTests
         Assert.Equal(address, identity.GetProperty("email").GetString());
         Assert.False(identity.GetProperty("email_verified").GetBoolean());
         Assert.Equal("Person Under Test", identity.GetProperty("name").GetString());
+        Assert.InRange(identity.GetProperty("auth_time").GetInt64(), DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 120, DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 5);
         var audience = identity.GetProperty("aud");
         Assert.Equal(application, audience.ValueKind == JsonValueKind.Array ? audience.EnumerateArray().Select(a => a.GetString()).Single() : audience.GetString());
 
@@ -192,23 +193,54 @@ public abstract partial class ServerTests
     }
 
     [Fact]
-    public async Task AskingToSignInAgain_OpensAFlowEvenWithASession_AndDoesNotAskAgainWhenItComesBack()
+    public async Task AskingToSignInAgain_ShowsTheFormEvenWithASession_AndOnlyTheNewSignInEndsTheFlow()
+    {
+        var (application, address) = await RegisterApplicationAndPersonAsync();
+        var browser = server.CreateClient(followRedirects: false);
+        var first = Pkce.New();
+        var firstCode = await SignInAndGetCodeAsync(browser, application, address, first);
+        var firstAt = Claims((await ExchangeAsync(application, firstCode, first.Verifier)).Body.GetProperty("id_token").GetString()!).GetProperty("auth_time").GetInt64();
+        await Task.Delay(1500);
+
+        var second = Pkce.New();
+        var again = await browser.GetAsync(new Uri(AuthorizeUrl(application, second.Challenge, prompt: "login"), UriKind.Relative));
+        Assert.Equal(HttpStatusCode.Redirect, again.StatusCode);
+        var location = again.Headers.Location!.OriginalString;
+        Assert.StartsWith("/login?flow=", location);
+        var flow = HttpUtility.ParseQueryString(location[(location.IndexOf('?') + 1)..])["flow"]!;
+
+        // The session that was there is not what the application asked for: the person is shown the form.
+        var screen = await browser.GetAsync(new Uri($"/api/v1/login-flows/{flow}", UriKind.Relative));
+        using var form = JsonDocument.Parse(await screen.Content.ReadAsStringAsync());
+        Assert.Equal("form", form.RootElement.GetProperty("next").GetString());
+
+        // Their answer is, and the request that comes back no longer asks them again.
+        var signedIn = await browser.PostAsJsonAsync(new Uri($"/api/v1/login-flows/{flow}/password", UriKind.Relative), new { email = address, password = Password });
+        using var next = JsonDocument.Parse(await signedIn.Content.ReadAsStringAsync());
+        var resume = next.RootElement.GetProperty("redirect_to").GetString()!;
+        Assert.DoesNotContain("prompt=login", resume);
+        var back = await browser.GetAsync(new Uri(resume, UriKind.Relative));
+        Assert.Equal(HttpStatusCode.Redirect, back.StatusCode);
+        var code = HttpUtility.ParseQueryString(back.Headers.Location!.Query)["code"]!;
+        var secondAt = Claims((await ExchangeAsync(application, code, second.Verifier)).Body.GetProperty("id_token").GetString()!).GetProperty("auth_time").GetInt64();
+        Assert.True(secondAt > firstAt, "the ID token says when the person signed in, and that was just now");
+    }
+
+    [Fact]
+    public async Task MaxAge_AsksAgainOnlyOfASessionThatIsOlderThanThat()
     {
         var (application, address) = await RegisterApplicationAndPersonAsync();
         var browser = server.CreateClient(followRedirects: false);
         await SignInAndGetCodeAsync(browser, application, address, Pkce.New());
+        await Task.Delay(1500);
 
-        var again = await browser.GetAsync(new Uri(AuthorizeUrl(application, Pkce.New().Challenge, prompt: "login"), UriKind.Relative));
-        Assert.Equal(HttpStatusCode.Redirect, again.StatusCode);
-        Assert.StartsWith("/login?flow=", again.Headers.Location!.OriginalString);
+        var recent = await browser.GetAsync(new Uri(AuthorizeUrl(application, Pkce.New().Challenge, maxAge: "3600"), UriKind.Relative));
+        Assert.Equal(HttpStatusCode.Redirect, recent.StatusCode);
+        Assert.StartsWith(Callback, recent.Headers.Location!.OriginalString);
 
-        // The flow is not satisfied by the session that was there: the person is asked.
-        var flow = HttpUtility.ParseQueryString(again.Headers.Location.OriginalString[(again.Headers.Location.OriginalString.IndexOf('?') + 1)..])["flow"]!;
-        var form = await browser.GetAsync(new Uri($"/api/v1/login-flows/{flow}", UriKind.Relative));
-        using var body = JsonDocument.Parse(await form.Content.ReadAsStringAsync());
-        Assert.Equal("redirect", body.RootElement.GetProperty("next").GetString());
-        var resume = body.RootElement.GetProperty("redirect_to").GetString()!;
-        Assert.DoesNotContain("prompt=login", resume);
+        var tooOld = await browser.GetAsync(new Uri(AuthorizeUrl(application, Pkce.New().Challenge, maxAge: "0"), UriKind.Relative));
+        Assert.Equal(HttpStatusCode.Redirect, tooOld.StatusCode);
+        Assert.StartsWith("/login?flow=", tooOld.Headers.Location!.OriginalString);
     }
 
     private async Task<string> RegisterApplicationAsync()
@@ -223,10 +255,12 @@ public abstract partial class ServerTests
             ConsentType = ConsentTypes.Implicit,
             DisplayName = "Application under test",
             RedirectUris = { new Uri(Callback) },
+            PostLogoutRedirectUris = { new Uri(SignedOut) },
             Permissions =
             {
                 Permissions.Endpoints.Authorization,
                 Permissions.Endpoints.Token,
+                Permissions.Endpoints.EndSession,
                 Permissions.GrantTypes.AuthorizationCode,
                 Permissions.GrantTypes.RefreshToken,
                 Permissions.ResponseTypes.Code,
@@ -251,28 +285,29 @@ public abstract partial class ServerTests
         return (application, address);
     }
 
-    private static string AuthorizeUrl(string clientId, string challenge, string? prompt = null, string? loginHint = null, string? locales = null)
+    private static string AuthorizeUrl(string clientId, string challenge, string? prompt = null, string? loginHint = null, string? locales = null, string? maxAge = null, string scope = "openid email profile offline_access")
     {
         var query = new Dictionary<string, string?>
         {
             ["client_id"] = clientId,
             ["response_type"] = "code",
             ["redirect_uri"] = Callback,
-            ["scope"] = "openid email profile offline_access",
+            ["scope"] = scope,
             ["state"] = "state-123",
             ["code_challenge"] = challenge,
             ["code_challenge_method"] = "S256",
             ["prompt"] = prompt,
             ["login_hint"] = loginHint,
             ["ui_locales"] = locales,
+            ["max_age"] = maxAge,
         };
         return "/connect/authorize?" + string.Join('&', query.Where(p => p.Value is not null).Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
     }
 
     /// <summary>The application sends the browser to the authorization endpoint; the flow id it is sent on to comes back.</summary>
-    private static async Task<string> StartAsync(HttpClient browser, string clientId, string challenge)
+    private static async Task<string> StartAsync(HttpClient browser, string clientId, string challenge, string scope = "openid email profile offline_access")
     {
-        var start = await browser.GetAsync(new Uri(AuthorizeUrl(clientId, challenge), UriKind.Relative));
+        var start = await browser.GetAsync(new Uri(AuthorizeUrl(clientId, challenge, scope: scope), UriKind.Relative));
         Assert.Equal(HttpStatusCode.Redirect, start.StatusCode);
         var location = start.Headers.Location!.OriginalString;
         return HttpUtility.ParseQueryString(location[(location.IndexOf('?') + 1)..])["flow"]!;

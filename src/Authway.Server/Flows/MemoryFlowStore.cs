@@ -19,29 +19,31 @@ public sealed class MemoryFlowStore(TimeProvider time) : IFlowStore
     /// <summary>How long an id is remembered after the flow ended.</summary>
     private static readonly TimeSpan Remembered = TimeSpan.FromHours(1);
 
-    private sealed record Entry(LoginFlow Flow, bool Completed);
+    private sealed record Entry(Flow Flow, bool Completed);
 
     private readonly ConcurrentDictionary<string, Entry> _flows = new();
 
-    public LoginFlow Open(string clientId, string clientName, IReadOnlyList<string> requestedScope, string resumeUrl, FlowHints hints)
+    public Flow Open(FlowKind kind, string clientId, string clientName, IReadOnlyList<string> requestedScope, string continueTo, FlowHints hints)
     {
         Forget();
-        var flow = new LoginFlow(
+        var flow = new Flow(
             WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(24)),
+            kind,
             clientId,
             clientName,
             requestedScope,
-            resumeUrl,
+            continueTo,
             hints,
+            time.GetUtcNow(),
             time.GetUtcNow().Add(Lifetime));
         _flows[flow.Id] = new Entry(flow, Completed: false);
         return flow;
     }
 
-    public FlowState Find(string id, out LoginFlow? flow)
+    public FlowState Find(string id, FlowKind kind, out Flow? flow)
     {
         flow = null;
-        if (!_flows.TryGetValue(id, out var entry))
+        if (!_flows.TryGetValue(id, out var entry) || entry.Flow.Kind != kind)
         {
             return FlowState.Unknown;
         }
