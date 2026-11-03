@@ -7,11 +7,11 @@ namespace Authway.Data.SqlServer;
 /// <summary>Configures <see cref="AuthwayDbContext"/> for SQL Server.</summary>
 public static class SqlServerDatabase
 {
-    public static DbContextOptionsBuilder<AuthwayDbContext> UseAuthwaySqlServer(
-        this DbContextOptionsBuilder<AuthwayDbContext> options, string connectionString)
+    public static DbContextOptionsBuilder UseAuthwaySqlServer(this DbContextOptionsBuilder options, string connectionString)
     {
         options.UseSqlServer(connectionString, sql =>
             sql.MigrationsAssembly(typeof(SqlServerDatabase).Assembly.GetName().Name));
+        options.UseOpenIddict<Guid>();
         return options;
     }
 }
@@ -21,8 +21,8 @@ public sealed class SqlServerDesignTimeFactory : IDesignTimeDbContextFactory<Aut
 {
     public AuthwayDbContext CreateDbContext(string[] args)
     {
-        var options = new DbContextOptionsBuilder<AuthwayDbContext>()
-            .UseAuthwaySqlServer("Server=localhost;Database=authway_design;User Id=design;Password=design;TrustServerCertificate=true");
+        var options = new DbContextOptionsBuilder<AuthwayDbContext>();
+        options.UseAuthwaySqlServer("Server=localhost;Database=authway_design;User Id=design;Password=design;TrustServerCertificate=true");
         return new AuthwayDbContext(options.Options);
     }
 }

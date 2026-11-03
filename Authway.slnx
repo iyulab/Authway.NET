@@ -3,8 +3,10 @@
     <Project Path="src/Authway.Data.Postgres/Authway.Data.Postgres.csproj" />
     <Project Path="src/Authway.Data.SqlServer/Authway.Data.SqlServer.csproj" />
     <Project Path="src/Authway.Data/Authway.Data.csproj" />
+    <Project Path="src/Authway.Server/Authway.Server.csproj" />
   </Folder>
   <Folder Name="/test/">
     <Project Path="test/Authway.Data.Tests/Authway.Data.Tests.csproj" />
+    <Project Path="test/Authway.Server.Tests/Authway.Server.Tests.csproj" />
   </Folder>
 </Solution>

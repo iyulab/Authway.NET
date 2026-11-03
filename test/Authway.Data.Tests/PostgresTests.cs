@@ -13,8 +13,12 @@ public sealed class PostgresFixture : IAsyncLifetime, IDatabaseFixture
 
     public Task DisposeAsync() => _container.DisposeAsync().AsTask();
 
-    public DbContextOptions<AuthwayDbContext> Options() =>
-        new DbContextOptionsBuilder<AuthwayDbContext>().UseAuthwayPostgres(_container.GetConnectionString()).Options;
+    public DbContextOptions<AuthwayDbContext> Options()
+    {
+        var options = new DbContextOptionsBuilder<AuthwayDbContext>();
+        options.UseAuthwayPostgres(_container.GetConnectionString());
+        return options.Options;
+    }
 }
 
 public sealed class PostgresTests(PostgresFixture fixture) : DatabaseTests(fixture), IClassFixture<PostgresFixture>;

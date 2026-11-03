@@ -7,11 +7,11 @@ namespace Authway.Data.Postgres;
 /// <summary>Configures <see cref="AuthwayDbContext"/> for PostgreSQL.</summary>
 public static class PostgresDatabase
 {
-    public static DbContextOptionsBuilder<AuthwayDbContext> UseAuthwayPostgres(
-        this DbContextOptionsBuilder<AuthwayDbContext> options, string connectionString)
+    public static DbContextOptionsBuilder UseAuthwayPostgres(this DbContextOptionsBuilder options, string connectionString)
     {
         options.UseNpgsql(connectionString, npgsql =>
             npgsql.MigrationsAssembly(typeof(PostgresDatabase).Assembly.GetName().Name));
+        options.UseOpenIddict<Guid>();
         return options;
     }
 }
@@ -21,8 +21,8 @@ public sealed class PostgresDesignTimeFactory : IDesignTimeDbContextFactory<Auth
 {
     public AuthwayDbContext CreateDbContext(string[] args)
     {
-        var options = new DbContextOptionsBuilder<AuthwayDbContext>()
-            .UseAuthwayPostgres("Host=localhost;Database=authway_design;Username=design;Password=design");
+        var options = new DbContextOptionsBuilder<AuthwayDbContext>();
+        options.UseAuthwayPostgres("Host=localhost;Database=authway_design;Username=design;Password=design");
         return new AuthwayDbContext(options.Options);
     }
 }

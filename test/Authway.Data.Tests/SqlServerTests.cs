@@ -13,8 +13,12 @@ public sealed class SqlServerFixture : IAsyncLifetime, IDatabaseFixture
 
     public Task DisposeAsync() => _container.DisposeAsync().AsTask();
 
-    public DbContextOptions<AuthwayDbContext> Options() =>
-        new DbContextOptionsBuilder<AuthwayDbContext>().UseAuthwaySqlServer(_container.GetConnectionString()).Options;
+    public DbContextOptions<AuthwayDbContext> Options()
+    {
+        var options = new DbContextOptionsBuilder<AuthwayDbContext>();
+        options.UseAuthwaySqlServer(_container.GetConnectionString());
+        return options.Options;
+    }
 }
 
 public sealed class SqlServerTests(SqlServerFixture fixture) : DatabaseTests(fixture), IClassFixture<SqlServerFixture>;
