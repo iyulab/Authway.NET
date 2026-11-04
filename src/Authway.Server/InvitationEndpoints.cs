@@ -239,7 +239,7 @@ internal static partial class InvitationEndpoints
 
     private static string Iso(DateTimeOffset at) => at.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
 
-    private static bool IsAddress(string? email) => email is { Length: <= 320 } && Address().IsMatch(email);
+    internal static bool IsAddress(string? email) => email is { Length: <= 320 } && Address().IsMatch(email);
 
     /// <summary>Something before an at sign, and after it a name with a dot in it: what can be mailed, not a proof it can.</summary>
     [GeneratedRegex(@"^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]

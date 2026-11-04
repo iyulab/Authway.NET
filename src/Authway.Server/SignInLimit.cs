@@ -13,7 +13,12 @@ internal static class SignInLimit
 {
     public const string Policy = "sign-in";
 
+    /// <summary>The policy of the calls that ask for a message to be sent to an address the caller names.</summary>
+    public const string MailPolicy = "mail-request";
+
     private const int DefaultPerMinute = 60;
+
+    private const int DefaultMailPer15Minutes = 20;
 
     public static void Add(IServiceCollection services) => services.AddRateLimiter(options =>
     {
@@ -33,6 +38,16 @@ internal static class SignInLimit
             return RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 });
+        });
+
+        // A mailbox is filled by many sources as easily as by one, so each account is also held to a few messages
+        // (see EmailEndpoints); this is the ceiling of one network address.
+        options.AddPolicy(MailPolicy, context =>
+        {
+            var limit = context.RequestServices.GetRequiredService<IConfiguration>().GetValue("Authway:Limits:MailRequestsPer15Minutes", DefaultMailPer15Minutes);
+            return RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(15), QueueLimit = 0 });
         });
     });
 }

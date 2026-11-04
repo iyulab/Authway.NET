@@ -12,6 +12,8 @@ internal static class AuditActions
     public const string UserLogin = "user.login";
     public const string UserLoginFailed = "user.login_failed";
     public const string UserLogout = "user.logout";
+    public const string UserPasswordReset = "user.password_reset";
+    public const string UserEmailVerified = "user.email_verified";
     public const string UserSuspended = "user.suspended";
     public const string UserReactivated = "user.reactivated";
     public const string ClientCreated = "client.created";
@@ -26,6 +28,8 @@ internal static class AuditActions
         (UserLogin, "User signed in"),
         (UserLoginFailed, "Sign-in refused"),
         (UserLogout, "User signed out"),
+        (UserPasswordReset, "Password reset with an emailed link"),
+        (UserEmailVerified, "Email address verified"),
         (UserSuspended, "User account suspended by an administrator"),
         (UserReactivated, "User account suspension lifted by an administrator"),
         (ClientCreated, "OAuth client created"),

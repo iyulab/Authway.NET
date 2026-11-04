@@ -22,6 +22,9 @@ public class AuthwayDbContext(DbContextOptions<AuthwayDbContext> options)
     /// <summary>The invitations to sign up.</summary>
     public DbSet<Invitation> Invitations => Set<Invitation>();
 
+    /// <summary>The links mailed to prove an address or to choose a new password.</summary>
+    public DbSet<EmailToken> EmailTokens => Set<EmailToken>();
+
     /// <summary>What was done, by whom: the audit log.</summary>
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
@@ -55,6 +58,17 @@ public class AuthwayDbContext(DbContextOptions<AuthwayDbContext> options)
             invitation.Property(i => i.Status).HasMaxLength(16);
             invitation.HasIndex(i => i.TokenHash).IsUnique();
             invitation.HasIndex(i => new { i.NormalizedEmail, i.Status });
+        });
+
+        builder.Entity<EmailToken>(token =>
+        {
+            token.ToTable("email_tokens");
+            token.HasKey(t => t.Id);
+            token.Property(t => t.Purpose).HasMaxLength(16);
+            token.Property(t => t.TokenHash).HasMaxLength(64);
+            token.HasIndex(t => t.TokenHash).IsUnique();
+            // How many links an account was sent lately.
+            token.HasIndex(t => new { t.UserId, t.Purpose, t.CreatedAt });
         });
 
         builder.Entity<AuditLog>(entry =>

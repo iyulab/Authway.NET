@@ -66,6 +66,8 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 
 builder.Services.AddAuthwayMail();
+builder.Services.AddSingleton<MailQueue>();
+builder.Services.AddHostedService(services => services.GetRequiredService<MailQueue>());
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower);
 
@@ -213,6 +215,7 @@ LogoutFlowEndpoints.Map(app);
 ConsentFlowEndpoints.Map(app);
 AdminEndpoints.Map(app);
 InvitationPublicEndpoints.Map(app);
+EmailEndpoints.Map(app);
 SignOutEverywhere.Map(app);
 
 app.Run();
