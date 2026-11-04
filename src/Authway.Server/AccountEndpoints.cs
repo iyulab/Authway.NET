@@ -3,6 +3,7 @@ using Authway.Data;
 using Microsoft.AspNetCore.Identity;
 using OpenIddict.Abstractions;
 using static Authway.Server.AdminRequest;
+using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Authway.Server;
 
@@ -21,21 +22,31 @@ internal static class AccountEndpoints
 
     private static async Task<IResult> ProfileAsync(HttpContext context, UserManager<ApplicationUser> users)
     {
-        var (user, _) = await UserToken.AuthenticateAsync(context, users);
+        var (user, principal) = await UserToken.AuthenticateAsync(context, users);
         if (user is null)
         {
             return UserToken.Unauthorized();
         }
 
+        // What the token may say about the person is what its scopes name, as at userinfo: the address with
+        // email, the name with profile. An application that asked for openid alone learns who signed in.
         var profile = new Dictionary<string, object?>
         {
             ["id"] = user.Id.ToString(),
-            ["email"] = user.Email,
-            ["name"] = user.DisplayName,
-            ["email_verified"] = user.EmailConfirmed,
             ["has_password"] = await users.HasPasswordAsync(user),
             ["created_at"] = user.CreatedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
         };
+        if (principal!.HasScope(Scopes.Email))
+        {
+            profile["email"] = user.Email;
+            profile["email_verified"] = user.EmailConfirmed;
+        }
+
+        if (principal!.HasScope(Scopes.Profile))
+        {
+            profile["name"] = user.DisplayName;
+        }
+
         return Results.Json(profile);
     }
 

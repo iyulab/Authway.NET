@@ -11,10 +11,10 @@ public abstract partial class ServerTests
     private static readonly Uri OwnProfile = new("/api/v1/profile/me", UriKind.Relative);
     private static readonly Uri OwnPassword = new("/api/v1/users/password", UriKind.Relative);
 
-    private async Task<JsonElement> SignInTokensAsync(string application, string address)
+    private async Task<JsonElement> SignInTokensAsync(string application, string address, string scope = "openid email profile offline_access")
     {
         var pkce = Pkce.New();
-        var code = await SignInAndGetCodeAsync(server.CreateClient(followRedirects: false), application, address, pkce);
+        var code = await SignInAndGetCodeAsync(server.CreateClient(followRedirects: false), application, address, pkce, scope);
         return (await ExchangeAsync(application, code, pkce.Verifier)).Body;
     }
 
@@ -51,6 +51,23 @@ public abstract partial class ServerTests
         var (clientId, secret, _) = await RegisterMachineAsync(AdminClient(AdminKey));
         var machine = await MachineTokenAsync(clientId, secret);
         await AssertRefusedAsync(await AsAsync(machine.Body.GetProperty("access_token").GetString()!, HttpMethod.Get, OwnProfile), HttpStatusCode.Unauthorized, "unauthorized");
+    }
+
+    [Theory]
+    [InlineData("openid", false, false)]
+    [InlineData("openid email", true, false)]
+    [InlineData("openid profile", false, true)]
+    public async Task TheProfile_SaysOnlyWhatTheScopesOfTheTokenName(string scope, bool address, bool name)
+    {
+        var (application, person) = await RegisterApplicationAndPersonAsync();
+        var token = (await SignInTokensAsync(application, person, scope)).GetProperty("access_token").GetString()!;
+
+        var profile = await BodyOfAsync(await AsAsync(token, HttpMethod.Get, OwnProfile));
+        Assert.Equal(await PersonIdAsync(person), profile.GetProperty("id").GetString());
+        Assert.True(profile.GetProperty("has_password").GetBoolean());
+        Assert.Equal(address, profile.TryGetProperty("email", out _));
+        Assert.Equal(address, profile.TryGetProperty("email_verified", out _));
+        Assert.Equal(name, profile.TryGetProperty("name", out _));
     }
 
     [Fact]

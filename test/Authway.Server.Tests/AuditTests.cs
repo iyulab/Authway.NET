@@ -168,7 +168,8 @@ public abstract partial class ServerTests
         var purged = await BodyOfAsync(await admin.DeleteAsync(AuditAt("logs/purge")));
 
         Assert.Equal(365, purged.GetProperty("retention_days").GetInt32());
-        Assert.True(purged.GetProperty("deleted").GetInt32() >= 1);
+        // Not a count of what this call removed: the retention job that runs beside the server may have removed
+        // the old row first, and the row being gone is what the purge promises.
         Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync(AuditAt($"logs/{old}"))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync(AuditAt($"logs/{recent}"))).StatusCode);
 

@@ -359,9 +359,9 @@ public abstract partial class ServerTests
         return HttpUtility.ParseQueryString(location[(location.IndexOf('?') + 1)..])["flow"]!;
     }
 
-    private static async Task<string> SignInAndGetCodeAsync(HttpClient browser, string clientId, string address, Pkce pkce)
+    private static async Task<string> SignInAndGetCodeAsync(HttpClient browser, string clientId, string address, Pkce pkce, string scope = "openid email profile offline_access")
     {
-        var flow = await StartAsync(browser, clientId, pkce.Challenge);
+        var flow = await StartAsync(browser, clientId, pkce.Challenge, scope);
         var signedIn = await browser.PostAsJsonAsync(new Uri($"/api/v1/login-flows/{flow}/password", UriKind.Relative), new { email = address, password = Password });
         Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
         using var next = JsonDocument.Parse(await signedIn.Content.ReadAsStringAsync());
