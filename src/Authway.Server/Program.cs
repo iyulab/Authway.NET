@@ -186,16 +186,8 @@ var app = builder.Build();
 
 LoginUi.Use(app);
 
-// What describes this installation is readable from any page.
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/.well-known", StringComparison.Ordinal))
-    {
-        context.Response.Headers.AccessControlAllowOrigin = "*";
-    }
-
-    await next();
-});
+// Which pages may call the server from a browser.
+BrowserOrigins.Use(app);
 
 app.UseRateLimiter();
 app.UseAuthentication();
