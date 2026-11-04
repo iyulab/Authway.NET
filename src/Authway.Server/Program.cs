@@ -63,6 +63,17 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IFlowStore, MemoryFlowStore>();
 builder.Services.AddScoped<Consents>();
 
+// The schema is brought up to date when the server starts (the host's configuration is read by then).
+if (builder.Configuration.GetValue("Authway:Database:MigrateOnStart", true))
+{
+    builder.Services.AddHostedService<MigrateOnStart>();
+}
+
+if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue("Authway:Dev:Seed", false))
+{
+    builder.Services.AddHostedService<DevSeed>();
+}
+
 builder.Services.AddAuthorization();
 
 builder.Services.AddOpenIddict()
@@ -107,6 +118,8 @@ builder.Services.AddOpenIddict()
 
 var app = builder.Build();
 
+LoginUi.Use(app);
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -117,6 +130,7 @@ app.MapPost("/connect/token", TokenEndpoint.HandleAsync).DisableAntiforgery();
 app.MapMethods("/connect/userinfo", [HttpMethods.Get, HttpMethods.Post], UserInfoEndpoint.HandleAsync).DisableAntiforgery();
 app.MapMethods("/connect/logout", [HttpMethods.Get, HttpMethods.Post], EndSessionEndpoint.HandleAsync).DisableAntiforgery();
 
+CapabilitiesEndpoint.Map(app);
 LoginFlowEndpoints.Map(app);
 LogoutFlowEndpoints.Map(app);
 ConsentFlowEndpoints.Map(app);

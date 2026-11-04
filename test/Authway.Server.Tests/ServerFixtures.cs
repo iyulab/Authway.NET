@@ -23,6 +23,9 @@ public abstract class ServerFixture : IAsyncLifetime, IServerFixture
 {
     private WebApplicationFactory<Program>? _factory;
 
+    /// <summary>A stand-in for the build of the sign-in screens, which the server serves.</summary>
+    public string UiDirectory { get; } = Path.Combine(Path.GetTempPath(), $"authway-ui-{Guid.NewGuid():N}");
+
     protected abstract DatabaseProvider Provider { get; }
 
     protected abstract Task StartDatabaseAsync();
@@ -40,6 +43,9 @@ public abstract class ServerFixture : IAsyncLifetime, IServerFixture
 
     public async Task InitializeAsync()
     {
+        Directory.CreateDirectory(Path.Combine(UiDirectory, "assets"));
+        await File.WriteAllTextAsync(Path.Combine(UiDirectory, "index.html"), "<!doctype html><title>sign-in screens</title>");
+        await File.WriteAllTextAsync(Path.Combine(UiDirectory, "assets", "app.js"), "console.log('screen');");
         await StartDatabaseAsync();
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -48,6 +54,7 @@ public abstract class ServerFixture : IAsyncLifetime, IServerFixture
             {
                 ["Authway:Database:Provider"] = Provider.ToString(),
                 ["ConnectionStrings:Authway"] = ConnectionString,
+                ["Authway:Ui:Directory"] = UiDirectory,
             }));
         });
         // The server creates the schema it runs on when it starts.
@@ -63,6 +70,7 @@ public abstract class ServerFixture : IAsyncLifetime, IServerFixture
         }
 
         await StopDatabaseAsync();
+        Directory.Delete(UiDirectory, recursive: true);
     }
 }
 
