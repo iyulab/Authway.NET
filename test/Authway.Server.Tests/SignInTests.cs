@@ -244,6 +244,51 @@ public abstract partial class ServerTests
         Assert.StartsWith("/login?flow=", tooOld.Headers.Location!.OriginalString);
     }
 
+    [Fact]
+    public async Task ALoopbackRedirect_IsValidAtAnyPort_AndOnlyThere()
+    {
+        // RFC 8252 §7.3: a native application cannot know its port before it starts, so the loopback address it
+        // registered is the address at any port — and nothing else is: not another path, not another address.
+        var clientId = $"native-{Guid.NewGuid():N}";
+        using (var scope = server.Services.CreateScope())
+        {
+            var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
+            await applications.CreateAsync(new OpenIddictApplicationDescriptor
+            {
+                ClientId = clientId,
+                ClientType = ClientTypes.Public,
+                ConsentType = ConsentTypes.Implicit,
+                DisplayName = "Native application under test",
+                RedirectUris = { new Uri("http://127.0.0.1/native-callback") },
+                Permissions =
+                {
+                    Permissions.Endpoints.Authorization,
+                    Permissions.Endpoints.Token,
+                    Permissions.GrantTypes.AuthorizationCode,
+                    Permissions.ResponseTypes.Code,
+                    Permissions.Scopes.Email,
+                    Permissions.Scopes.Profile,
+                },
+                Requirements = { Requirements.Features.ProofKeyForCodeExchange },
+            });
+        }
+
+        var browser = server.CreateClient(followRedirects: false);
+        async Task<bool> OpensTheLoginScreenAsync(string redirectUri)
+        {
+            var query = $"client_id={clientId}&response_type=code&scope=openid&state=s&redirect_uri={Uri.EscapeDataString(redirectUri)}&code_challenge={Pkce.New().Challenge}&code_challenge_method=S256";
+            var response = await browser.GetAsync(new Uri($"/connect/authorize?{query}", UriKind.Relative));
+            return response.StatusCode == HttpStatusCode.Redirect && response.Headers.Location!.OriginalString.Contains("flow=", StringComparison.Ordinal);
+        }
+
+        Assert.True(await OpensTheLoginScreenAsync("http://127.0.0.1/native-callback"));
+        Assert.True(await OpensTheLoginScreenAsync("http://127.0.0.1:53682/native-callback"));
+        Assert.False(await OpensTheLoginScreenAsync("http://127.0.0.1:53682/somewhere-else"));
+        Assert.False(await OpensTheLoginScreenAsync("http://[::1]:53682/native-callback"));
+        Assert.False(await OpensTheLoginScreenAsync("http://localhost:53682/native-callback"));
+        Assert.False(await OpensTheLoginScreenAsync("https://127.0.0.1:53682/native-callback"));
+    }
+
     private async Task<string> RegisterApplicationAsync(string consent = ConsentTypes.Implicit)
     {
         using var scope = server.Services.CreateScope();

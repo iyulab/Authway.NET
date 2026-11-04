@@ -97,7 +97,13 @@ builder.Services.AddAuthorization();
 builder.Services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.Zero);
 
 builder.Services.AddOpenIddict()
-    .AddCore(options => options.UseEntityFrameworkCore().UseDbContext<AuthwayDbContext>().ReplaceDefaultEntities<Guid>())
+    .AddCore(options =>
+    {
+        options.UseEntityFrameworkCore().UseDbContext<AuthwayDbContext>().ReplaceDefaultEntities<Guid>();
+
+        // A native application's loopback redirect is valid at any port (RFC 8252 §7.3).
+        options.ReplaceApplicationManager(typeof(LoopbackRedirectApplicationManager<>));
+    })
     .AddServer(options =>
     {
         // The metadata is served where OpenID Connect Discovery has it and at the address of RFC 8414.

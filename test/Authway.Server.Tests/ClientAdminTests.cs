@@ -115,6 +115,25 @@ public abstract partial class ServerTests
     }
 
     [Fact]
+    public async Task APublicClient_WithOnlyNativeRedirects_NamesNoOrigins()
+    {
+        var admin = AdminClient(AdminKey);
+        foreach (var redirect in new[] { "http://127.0.0.1:53682/callback", "http://[::1]:53682/callback", "com.example.app:/callback" })
+        {
+            var created = await admin.PostAsJsonAsync(Clients, new { name = $"native-{Guid.NewGuid():N}"[..20], @public = true, redirect_uris = new[] { redirect }, grant_types = AuthorizationCode, scopes = Openid });
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        }
+
+        // A web address among them brings the origins back — and a name that is not a loopback address is a web one.
+        foreach (var redirect in new[] { "http://localhost:53682/callback", "http://app.example.test/callback" })
+        {
+            await AssertRefusedAsync(
+                await admin.PostAsJsonAsync(Clients, new { name = "web-redirect", @public = true, redirect_uris = new[] { "http://127.0.0.1:53682/callback", redirect }, grant_types = AuthorizationCode, scopes = Openid }),
+                HttpStatusCode.BadRequest, "public_client_missing_allowed_origins", "allowed_origins");
+        }
+    }
+
+    [Fact]
     public async Task AClientThatIsNotCoherent_IsRefused()
     {
         var admin = AdminClient(AdminKey);

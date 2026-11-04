@@ -541,12 +541,42 @@ internal static class ClientEndpoints
             return Refuse("redirect_grant_without_redirect_uris", "A client that signs people in needs at least one redirect address.", "redirect_uris");
         }
 
-        if (spec.Public && spec.RedirectUris.Any(u => u.StartsWith("http", StringComparison.OrdinalIgnoreCase)) && spec.AllowedOrigins.Count == 0)
+        if (spec.Public && spec.GrantTypes.Contains(GrantTypesOf.AuthorizationCode) && UsesBrowserRedirect(spec.RedirectUris) && spec.AllowedOrigins.Count == 0)
         {
             return Refuse("public_client_missing_allowed_origins", "A public client with a web redirect address names the origins it is served from.", "allowed_origins");
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether a redirect address is one a web page is served at, which has an origin to list: https, or http at
+    /// anything but a loopback address. A native application's redirect (a custom scheme, or http at a loopback
+    /// address) has no origin, so a public client that has only those names none. An address that is not an
+    /// address counts as a web one, so the client is asked for its origins rather than let through.
+    /// </summary>
+    private static bool UsesBrowserRedirect(IEnumerable<string> redirectUris)
+    {
+        foreach (var raw in redirectUris)
+        {
+            if (!Uri.TryCreate(raw.Trim(), UriKind.Absolute, out var uri))
+            {
+                return true;
+            }
+
+            if (uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                && !(System.Net.IPAddress.TryParse(uri.IdnHost, out var address) && System.Net.IPAddress.IsLoopback(address)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>An array of strings, or <c>null</c> when the member is absent; anything else is refused.</summary>
