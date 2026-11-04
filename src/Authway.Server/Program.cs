@@ -87,6 +87,10 @@ if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue("Authw
 
 builder.Services.AddAuthorization();
 
+// A sign-in is checked against the account at every request that relies on it, not every half hour: ending
+// every session of a person (POST /api/v1/logout) takes effect at once.
+builder.Services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.Zero);
+
 builder.Services.AddOpenIddict()
     .AddCore(options => options.UseEntityFrameworkCore().UseDbContext<AuthwayDbContext>().ReplaceDefaultEntities<Guid>())
     .AddServer(options =>
@@ -101,6 +105,10 @@ builder.Services.AddOpenIddict()
                .AllowClientCredentialsFlow();
 
         options.RegisterScopes(Scopes.Email, Scopes.Profile, Scopes.OfflineAccess);
+
+        // A refresh token is used once: the one that was exchanged is not accepted again, not even for a
+        // while (the default leeway lets a retry through, and a stolen token with it).
+        options.SetRefreshTokenReuseLeeway(TimeSpan.Zero);
 
         // Access tokens are signed JWTs a resource server reads with the published keys (the
         // contract's JwtAccessToken), not tokens only this server can open.
@@ -125,6 +133,15 @@ builder.Services.AddOpenIddict()
             // Development runs over plain http; everywhere else the server answers only over https.
             aspNetCore.DisableTransportSecurityRequirement();
         }
+    })
+    // The access tokens this server issued, checked where a route of its own asks for the person's token; a token
+    // that was revoked, or whose authorization was, is not accepted.
+    .AddValidation(options =>
+    {
+        options.UseLocalServer();
+        options.UseAspNetCore();
+        options.EnableTokenEntryValidation();
+        options.EnableAuthorizationEntryValidation();
     });
 
 var app = builder.Build();
@@ -148,6 +165,7 @@ LogoutFlowEndpoints.Map(app);
 ConsentFlowEndpoints.Map(app);
 AdminEndpoints.Map(app);
 InvitationPublicEndpoints.Map(app);
+SignOutEverywhere.Map(app);
 
 app.Run();
 

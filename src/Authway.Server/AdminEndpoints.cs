@@ -23,6 +23,7 @@ internal static class AdminEndpoints
         admin.MapGet("/tenants", ListTenants);
         ClientEndpoints.Map(admin);
         InvitationEndpoints.Map(admin);
+        UserEndpoints.Map(admin);
     }
 
     private static IResult ListTenants() => Results.Json(new[]
