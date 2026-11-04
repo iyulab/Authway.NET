@@ -23,7 +23,7 @@ public sealed class MemoryFlowStore(TimeProvider time) : IFlowStore
 
     private readonly ConcurrentDictionary<string, Entry> _flows = new();
 
-    public Flow Open(FlowKind kind, string clientId, string clientName, IReadOnlyList<string> requestedScope, string continueTo, FlowHints hints)
+    public Flow Open(FlowKind kind, string clientId, string clientName, IReadOnlyList<string> requestedScope, string continueTo, FlowHints hints, string? subject = null, string? rejectTo = null)
     {
         Forget();
         var flow = new Flow(
@@ -35,7 +35,9 @@ public sealed class MemoryFlowStore(TimeProvider time) : IFlowStore
             continueTo,
             hints,
             time.GetUtcNow(),
-            time.GetUtcNow().Add(Lifetime));
+            time.GetUtcNow().Add(Lifetime),
+            subject,
+            rejectTo);
         _flows[flow.Id] = new Entry(flow, Completed: false);
         return flow;
     }

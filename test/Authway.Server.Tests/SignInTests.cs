@@ -243,7 +243,7 @@ public abstract partial class ServerTests
         Assert.StartsWith("/login?flow=", tooOld.Headers.Location!.OriginalString);
     }
 
-    private async Task<string> RegisterApplicationAsync()
+    private async Task<string> RegisterApplicationAsync(string consent = ConsentTypes.Implicit)
     {
         using var scope = server.Services.CreateScope();
         var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
@@ -252,7 +252,7 @@ public abstract partial class ServerTests
         {
             ClientId = clientId,
             ClientType = ClientTypes.Public,
-            ConsentType = ConsentTypes.Implicit,
+            ConsentType = consent,
             DisplayName = "Application under test",
             RedirectUris = { new Uri(Callback) },
             PostLogoutRedirectUris = { new Uri(SignedOut) },
@@ -274,9 +274,9 @@ public abstract partial class ServerTests
         return clientId;
     }
 
-    private async Task<(string Application, string Address)> RegisterApplicationAndPersonAsync()
+    private async Task<(string Application, string Address)> RegisterApplicationAndPersonAsync(string consent = ConsentTypes.Implicit)
     {
-        var application = await RegisterApplicationAsync();
+        var application = await RegisterApplicationAsync(consent);
         using var scope = server.Services.CreateScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var address = $"person-{Guid.NewGuid():N}@example.test";

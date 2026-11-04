@@ -65,9 +65,13 @@ internal static class TokenEndpoint
         var signedInAt = long.TryParse(principal.GetClaim(Claims.AuthenticationTime), out var seconds)
             ? DateTimeOffset.FromUnixTimeSeconds(seconds)
             : DateTimeOffset.UtcNow;
-        return Results.SignIn(
-            new ClaimsPrincipal(Identities.Of(user, principal.GetScopes(), signedInAt)),
-            authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        var identity = Identities.Of(user, principal.GetScopes(), signedInAt);
+        if (principal.GetAuthorizationId() is { } authorization)
+        {
+            identity.SetAuthorizationId(authorization);
+        }
+
+        return Results.SignIn(new ClaimsPrincipal(identity), authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
     /// <summary>A token for an application acting as itself: its subject is its client id.</summary>

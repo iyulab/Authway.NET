@@ -4,6 +4,7 @@ using Authway.Server.Flows;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Primitives;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
@@ -22,11 +23,15 @@ internal static class AuthorizationEndpoint
     /// <summary>The route of the sign-in screen; it is handed the flow id.</summary>
     public const string LoginScreen = "/login";
 
+    /// <summary>The route of the consent screen; it is handed the flow id.</summary>
+    public const string ConsentScreen = "/consent";
+
     public static async Task<IResult> HandleAsync(
         HttpContext context,
         IOpenIddictApplicationManager applications,
         UserManager<ApplicationUser> users,
         IFlowStore flows,
+        Consents consents,
         TimeProvider time)
     {
         var request = context.GetOpenIddictServerRequest()
@@ -56,7 +61,7 @@ internal static class AuthorizationEndpoint
                 request.ClientId!,
                 await applications.GetDisplayNameAsync(application) ?? request.ClientId!,
                 request.GetScopes(),
-                ResumeUrl(context),
+                ResumeUrl(context, PromptValues.Login),
                 HintsOf(request));
             return Results.Redirect($"{LoginScreen}?flow={Uri.EscapeDataString(flow.Id)}");
         }
@@ -67,19 +72,48 @@ internal static class AuthorizationEndpoint
             return Refuse(Errors.LoginRequired, "The user is not signed in.");
         }
 
-        if (await applications.GetConsentTypeAsync(application) is ConsentTypes.Explicit)
+        // An application the account holder owns (consent type implicit) is not asked about; any other is,
+        // unless the person has already said yes to what it asks for.
+        var skipsConsent = await applications.GetConsentTypeAsync(application) is ConsentTypes.Implicit;
+        var subject = user.Id.ToString();
+        var requested = request.GetScopes();
+        var consent = await consents.FindAsync(
+            subject,
+            application,
+            requested,
+            ignoreKept: !skipsConsent && request.HasPromptValue(PromptValues.Consent),
+            answeredId: request.GetParameter(Consents.AnsweredParameter)?.ToString());
+        if (consent is null && skipsConsent)
         {
-            // Asking for consent is its own flow; until it is there, an application that needs it cannot be served.
-            return Refuse(Errors.ConsentRequired, "The application needs the user's consent, which this server cannot ask for yet.");
+            consent = await consents.GrantAsync(subject, application, requested, keep: true);
         }
 
-        return Results.SignIn(
-            new ClaimsPrincipal(Identities.Of(user, request.GetScopes(), authenticatedAt.Value)),
-            authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        if (consent is null)
+        {
+            if (request.HasPromptValue(PromptValues.None))
+            {
+                return Refuse(Errors.ConsentRequired, "The user has not allowed this application.");
+            }
+
+            var ask = flows.Open(
+                FlowKind.Consent,
+                request.ClientId!,
+                await applications.GetDisplayNameAsync(application) ?? request.ClientId!,
+                requested,
+                ResumeUrl(context, PromptValues.Consent),
+                HintsOf(request),
+                subject,
+                rejectTo: Denied(request));
+            return Results.Redirect($"{ConsentScreen}?flow={Uri.EscapeDataString(ask.Id)}");
+        }
+
+        var identity = Identities.Of(user, consent.Scopes, authenticatedAt.Value);
+        identity.SetAuthorizationId(consent.AuthorizationId);
+        return Results.SignIn(new ClaimsPrincipal(identity), authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
-    /// <summary>The request the person was sent here with, minus the demand to sign in again, which is what they are about to do.</summary>
-    private static string ResumeUrl(HttpContext context)
+    /// <summary>The request the person was sent here with, minus the demand (sign in again, be asked again) that they are about to meet.</summary>
+    private static string ResumeUrl(HttpContext context, string answered)
     {
         IEnumerable<KeyValuePair<string, StringValues>> parameters = context.Request.HasFormContentType
             ? context.Request.Form
@@ -88,9 +122,14 @@ internal static class AuthorizationEndpoint
         var kept = new List<KeyValuePair<string, StringValues>>();
         foreach (var (name, value) in parameters)
         {
+            if (name == Consents.AnsweredParameter)
+            {
+                continue;
+            }
+
             if (name == Parameters.Prompt)
             {
-                var rest = string.Join(' ', value.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(p => p != PromptValues.Login));
+                var rest = string.Join(' ', value.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(p => p != answered));
                 if (rest.Length > 0)
                 {
                     kept.Add(new(name, rest));
@@ -103,6 +142,18 @@ internal static class AuthorizationEndpoint
         }
 
         return context.Request.PathBase + context.Request.Path + QueryString.Create(kept);
+    }
+
+    /// <summary>Where the application is told the person said no.</summary>
+    private static string Denied(OpenIddictRequest request)
+    {
+        var parameters = new Dictionary<string, string?>
+        {
+            [Parameters.Error] = Errors.AccessDenied,
+            [Parameters.ErrorDescription] = "The user denied the request.",
+            [Parameters.State] = request.State,
+        };
+        return QueryHelpers.AddQueryString(request.RedirectUri!, parameters.Where(p => !string.IsNullOrEmpty(p.Value)));
     }
 
     private static FlowHints HintsOf(OpenIddictRequest request)

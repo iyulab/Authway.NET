@@ -35,7 +35,7 @@ internal static class EndSessionEndpoint
         var application = clientId.Length == 0 ? null : await applications.FindByClientIdAsync(clientId);
         var clientName = application is null ? string.Empty : await applications.GetDisplayNameAsync(application) ?? clientId;
 
-        var flow = flows.Open(FlowKind.Logout, clientId, clientName, [], Destination(request), NoHints);
+        var flow = flows.Open(FlowKind.Logout, clientId, clientName, [], Destination(request), NoHints, subject: hint?.GetClaim(Claims.Subject));
         return Results.Redirect($"{LogoutScreen}?flow={Uri.EscapeDataString(flow.Id)}");
     }
 

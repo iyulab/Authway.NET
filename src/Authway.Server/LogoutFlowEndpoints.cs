@@ -15,7 +15,7 @@ namespace Authway.Server;
 internal static class LogoutFlowEndpoints
 {
     public static void Map(IEndpointRouteBuilder app) =>
-        app.MapPost("/api/v1/logout-flows/{flow}", CompleteAsync);
+        app.MapPost("/api/v1/logout-flows/{flow}", CompleteAsync).RefuseCrossSite();
 
     private static async Task<IResult> CompleteAsync(
         string flow,
@@ -34,6 +34,14 @@ internal static class LogoutFlowEndpoints
         var session = await context.AuthenticateAsync(IdentityConstants.ApplicationScheme);
         var subject = session.Principal?.FindFirst(Claims.Subject)?.Value;
 
+        // An application that says whom it is signing out (the ID token it holds) does not get to sign out someone
+        // else who happens to be using this browser: if that is not the person signed in here, nothing of theirs ends.
+        if (open!.Subject is not null && open.Subject != subject)
+        {
+            store.Complete(flow);
+            return Results.Json(new { next = "redirect", redirect_to = open.ContinueTo }, LoginFlowJson.Options);
+        }
+
         await signIn.SignOutAsync();
         if (subject is not null)
         {
@@ -43,6 +51,6 @@ internal static class LogoutFlowEndpoints
         }
 
         store.Complete(flow);
-        return Results.Json(new { next = "redirect", redirect_to = open!.ContinueTo }, LoginFlowJson.Options);
+        return Results.Json(new { next = "redirect", redirect_to = open.ContinueTo }, LoginFlowJson.Options);
     }
 }

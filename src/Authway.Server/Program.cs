@@ -61,6 +61,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IFlowStore, MemoryFlowStore>();
+builder.Services.AddScoped<Consents>();
 
 builder.Services.AddAuthorization();
 
@@ -118,6 +119,7 @@ app.MapMethods("/connect/logout", [HttpMethods.Get, HttpMethods.Post], EndSessio
 
 LoginFlowEndpoints.Map(app);
 LogoutFlowEndpoints.Map(app);
+ConsentFlowEndpoints.Map(app);
 
 app.Run();
 

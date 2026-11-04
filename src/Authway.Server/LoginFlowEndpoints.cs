@@ -22,7 +22,7 @@ internal static class LoginFlowEndpoints
     {
         var flows = app.MapGroup("/api/v1/login-flows");
         flows.MapGet("/{flow}", GetAsync);
-        flows.MapPost("/{flow}/password", SubmitPasswordAsync);
+        flows.MapPost("/{flow}/password", SubmitPasswordAsync).RefuseCrossSite();
     }
 
     private static async Task<IResult> GetAsync(string flow, HttpContext context, IFlowStore store)

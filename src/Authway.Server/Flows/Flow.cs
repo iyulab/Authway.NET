@@ -14,6 +14,9 @@ public enum FlowKind
 
     /// <summary>Sign out.</summary>
     Logout,
+
+    /// <summary>Say what an application may do with the account.</summary>
+    Consent,
 }
 
 /// <summary>
@@ -30,6 +33,8 @@ public enum FlowKind
 /// <param name="Hints">What the request asked of the screen.</param>
 /// <param name="OpenedAt">When the flow was opened: a session that began before it is not an answer to it.</param>
 /// <param name="ExpiresAt">When the person has run out of time.</param>
+/// <param name="Subject">Who the flow is asking, when it asks one person in particular.</param>
+/// <param name="RejectTo">Where the browser goes when the person says no: back to the application, with the error.</param>
 public sealed record Flow(
     string Id,
     FlowKind Kind,
@@ -39,7 +44,9 @@ public sealed record Flow(
     string ContinueTo,
     FlowHints Hints,
     DateTimeOffset OpenedAt,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset ExpiresAt,
+    string? Subject = null,
+    string? RejectTo = null);
 
 /// <summary>What a flow id stands for.</summary>
 public enum FlowState
@@ -58,7 +65,7 @@ public enum FlowState
 public interface IFlowStore
 {
     /// <summary>Opens a flow for the request and returns it.</summary>
-    Flow Open(FlowKind kind, string clientId, string clientName, IReadOnlyList<string> requestedScope, string continueTo, FlowHints hints);
+    Flow Open(FlowKind kind, string clientId, string clientName, IReadOnlyList<string> requestedScope, string continueTo, FlowHints hints, string? subject = null, string? rejectTo = null);
 
     /// <summary>
     /// Says what the id stands for and, for an open flow of that kind, returns
