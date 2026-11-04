@@ -101,10 +101,11 @@ public abstract partial class ServerTests
         using var next = JsonDocument.Parse(await signedIn.Content.ReadAsStringAsync());
         Assert.Equal("redirect", next.RootElement.GetProperty("next").GetString());
         var resume = next.RootElement.GetProperty("redirect_to").GetString()!;
-        Assert.StartsWith("/connect/authorize?", resume);
+        Assert.EndsWith("/connect/authorize?", resume[..(resume.IndexOf('?', StringComparison.Ordinal) + 1)], StringComparison.Ordinal);
+        Assert.StartsWith("http", resume, StringComparison.Ordinal);
 
         // The browser goes back to the authorization endpoint, now with a session, and is sent on to the application.
-        var back = await browser.GetAsync(new Uri(resume, UriKind.Relative));
+        var back = await browser.GetAsync(new Uri(resume, UriKind.RelativeOrAbsolute));
         Assert.Equal(HttpStatusCode.Redirect, back.StatusCode);
         var returned = back.Headers.Location!;
         Assert.StartsWith(Callback, returned.OriginalString);
@@ -219,7 +220,7 @@ public abstract partial class ServerTests
         using var next = JsonDocument.Parse(await signedIn.Content.ReadAsStringAsync());
         var resume = next.RootElement.GetProperty("redirect_to").GetString()!;
         Assert.DoesNotContain("prompt=login", resume);
-        var back = await browser.GetAsync(new Uri(resume, UriKind.Relative));
+        var back = await browser.GetAsync(new Uri(resume, UriKind.RelativeOrAbsolute));
         Assert.Equal(HttpStatusCode.Redirect, back.StatusCode);
         var code = HttpUtility.ParseQueryString(back.Headers.Location!.Query)["code"]!;
         var secondAt = Claims((await ExchangeAsync(application, code, second.Verifier)).Body.GetProperty("id_token").GetString()!).GetProperty("auth_time").GetInt64();
@@ -319,7 +320,7 @@ public abstract partial class ServerTests
         var signedIn = await browser.PostAsJsonAsync(new Uri($"/api/v1/login-flows/{flow}/password", UriKind.Relative), new { email = address, password = Password });
         Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
         using var next = JsonDocument.Parse(await signedIn.Content.ReadAsStringAsync());
-        var back = await browser.GetAsync(new Uri(next.RootElement.GetProperty("redirect_to").GetString()!, UriKind.Relative));
+        var back = await browser.GetAsync(new Uri(next.RootElement.GetProperty("redirect_to").GetString()!, UriKind.RelativeOrAbsolute));
         Assert.Equal(HttpStatusCode.Redirect, back.StatusCode);
         return HttpUtility.ParseQueryString(back.Headers.Location!.Query)["code"]!;
     }

@@ -50,7 +50,7 @@ public abstract partial class ServerTests
         var flow = await StartAsync(browser, application, pkce.Challenge, scope: "openid");
         var signedIn = await browser.PostAsJsonAsync(new Uri($"/api/v1/login-flows/{flow}/password", UriKind.Relative), new { email = address, password = Password });
         using var next = JsonDocument.Parse(await signedIn.Content.ReadAsStringAsync());
-        var back = await browser.GetAsync(new Uri(next.RootElement.GetProperty("redirect_to").GetString()!, UriKind.Relative));
+        var back = await browser.GetAsync(new Uri(next.RootElement.GetProperty("redirect_to").GetString()!, UriKind.RelativeOrAbsolute));
         var tokens = await ExchangeAsync(application, HttpUtility.ParseQueryString(back.Headers.Location!.Query)["code"]!, pkce.Verifier);
 
         var response = await UserInfoAsync(tokens.Body.GetProperty("access_token").GetString()!);

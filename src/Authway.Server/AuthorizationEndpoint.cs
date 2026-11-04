@@ -141,7 +141,9 @@ internal static class AuthorizationEndpoint
             kept.Add(new(name, value));
         }
 
-        return context.Request.PathBase + context.Request.Path + QueryString.Create(kept);
+        // An absolute address, as the contract's redirect_to is: the screens may be served from another
+        // origin than this one, where an address with no origin would lead somewhere else.
+        return $"{context.Request.Scheme}://{context.Request.Host}{context.Request.PathBase}{context.Request.Path}{QueryString.Create(kept)}";
     }
 
     /// <summary>Where the application is told the person said no.</summary>

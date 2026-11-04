@@ -9,14 +9,14 @@ namespace Authway.Server;
 /// </summary>
 internal static class Problems
 {
-    public static IResult Refuse(int status, string code, string detail, int? retryAfter = null, string? field = null) =>
+    public static IResult Refuse(int status, string code, string detail, int? retryAfter = null, string? field = null, IReadOnlyDictionary<string, object>? extra = null) =>
         Results.Json(
-            Body(status, code, detail, retryAfter, field),
+            Body(status, code, detail, retryAfter, field, extra),
             options: (JsonSerializerOptions?)null,
             contentType: "application/problem+json",
             statusCode: status);
 
-    public static Dictionary<string, object> Body(int status, string code, string detail, int? retryAfter = null, string? field = null)
+    public static Dictionary<string, object> Body(int status, string code, string detail, int? retryAfter = null, string? field = null, IReadOnlyDictionary<string, object>? extra = null)
     {
         var body = new Dictionary<string, object>
         {
@@ -35,6 +35,12 @@ internal static class Problems
         if (!string.IsNullOrEmpty(field))
         {
             body["field"] = field;
+        }
+
+        // Members beside the code that say more about the refusal (how long a password must be, say).
+        foreach (var (name, value) in extra ?? new Dictionary<string, object>())
+        {
+            body.TryAdd(name, value);
         }
 
         return body;

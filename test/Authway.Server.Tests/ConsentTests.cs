@@ -201,7 +201,7 @@ public abstract partial class ServerTests
         var signedIn = await browser.PostAsJsonAsync(new Uri($"/api/v1/login-flows/{flow}/password", UriKind.Relative), new { email = address, password = Password });
         Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
         using var next = JsonDocument.Parse(await signedIn.Content.ReadAsStringAsync());
-        return await browser.GetAsync(new Uri(next.RootElement.GetProperty("redirect_to").GetString()!, UriKind.Relative));
+        return await browser.GetAsync(new Uri(next.RootElement.GetProperty("redirect_to").GetString()!, UriKind.RelativeOrAbsolute));
     }
 
     /// <summary>Signs in, and returns the id of the consent flow the application's request opens.</summary>
@@ -210,7 +210,7 @@ public abstract partial class ServerTests
         var flow = await StartAsync(browser, clientId, pkce.Challenge);
         var signedIn = await browser.PostAsJsonAsync(new Uri($"/api/v1/login-flows/{flow}/password", UriKind.Relative), new { email = address, password = Password });
         using var next = JsonDocument.Parse(await signedIn.Content.ReadAsStringAsync());
-        var back = await browser.GetAsync(new Uri(next.RootElement.GetProperty("redirect_to").GetString()!, UriKind.Relative));
+        var back = await browser.GetAsync(new Uri(next.RootElement.GetProperty("redirect_to").GetString()!, UriKind.RelativeOrAbsolute));
         Assert.Equal(HttpStatusCode.Redirect, back.StatusCode);
         var location = back.Headers.Location!.OriginalString;
         Assert.StartsWith("/consent?flow=", location);
@@ -224,7 +224,7 @@ public abstract partial class ServerTests
         Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
         using var next = JsonDocument.Parse(await accepted.Content.ReadAsStringAsync());
         Assert.Equal("redirect", next.RootElement.GetProperty("next").GetString());
-        var back = await browser.GetAsync(new Uri(next.RootElement.GetProperty("redirect_to").GetString()!, UriKind.Relative));
+        var back = await browser.GetAsync(new Uri(next.RootElement.GetProperty("redirect_to").GetString()!, UriKind.RelativeOrAbsolute));
         Assert.Equal(HttpStatusCode.Redirect, back.StatusCode);
         Assert.StartsWith(Callback, back.Headers.Location!.OriginalString);
         return HttpUtility.ParseQueryString(back.Headers.Location.Query)["code"]!;

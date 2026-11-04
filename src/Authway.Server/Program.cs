@@ -32,6 +32,14 @@ builder.Services
     .AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
     {
         options.User.RequireUniqueEmail = true;
+
+        // The contract's rule for a password: its length, and nothing about what it is made of.
+        options.Password.RequiredLength = InvitationPublicEndpoints.PasswordMinLength;
+        options.Password.RequireDigit = false;
+        options.Password.RequireLowercase = false;
+        options.Password.RequireUppercase = false;
+        options.Password.RequireNonAlphanumeric = false;
+
         options.ClaimsIdentity.UserNameClaimType = Claims.Name;
         options.ClaimsIdentity.UserIdClaimType = Claims.Subject;
         options.ClaimsIdentity.RoleClaimType = Claims.Role;
@@ -139,6 +147,7 @@ LoginFlowEndpoints.Map(app);
 LogoutFlowEndpoints.Map(app);
 ConsentFlowEndpoints.Map(app);
 AdminEndpoints.Map(app);
+InvitationPublicEndpoints.Map(app);
 
 app.Run();
 
