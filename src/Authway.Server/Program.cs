@@ -1,3 +1,4 @@
+using Authway.Server.Mail;
 using Authway.Data;
 using Authway.Server;
 using Authway.Server.Flows;
@@ -56,6 +57,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
+builder.Services.AddAuthwayMail();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower);
 

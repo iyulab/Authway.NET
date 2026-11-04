@@ -1,5 +1,24 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <!--
+    The messages the server sends are the files of packages/mail in the Authway repository — the same
+    files every implementation renders — built into the server. This project builds inside that
+    repository; a build elsewhere says where the files are with -p:AuthwayMailDir=<path to packages/mail/>.
+  -->
+  <PropertyGroup>
+    <AuthwayMailDir Condition="'$(AuthwayMailDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\..\packages\mail\</AuthwayMailDir>
+  </PropertyGroup>
+
+  <Target Name="RequireMailFiles" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(AuthwayMailDir)messages\layout.html')" Text="The message files (packages/mail of the Authway repository) are not at '$(AuthwayMailDir)'. Build inside the repository, or pass -p:AuthwayMailDir=&lt;path to packages/mail/&gt;." />
+  </Target>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(AuthwayMailDir)messages\*.*" LogicalName="mail/messages/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="$(AuthwayMailDir)messages\partials\*.*" LogicalName="mail/messages/partials/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="$(AuthwayMailDir)locales\*.json" LogicalName="mail/locales/%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Authway.Data.Postgres\Authway.Data.Postgres.csproj" />
     <ProjectReference Include="..\Authway.Data.SqlServer\Authway.Data.SqlServer.csproj" />

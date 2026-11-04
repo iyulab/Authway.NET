@@ -19,6 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- What the shared message files render to: every implementation must reproduce it. -->
+    <Content Include="..\..\..\..\packages\mail\golden.json" Link="mail-golden.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 
