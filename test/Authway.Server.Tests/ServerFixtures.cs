@@ -19,6 +19,9 @@ public interface IServerFixture
     /// <summary>A client of a server of its own on the same database, run with this configuration on top.</summary>
     HttpClient CreateClientWith(IReadOnlyDictionary<string, string?> configuration);
 
+    /// <summary>As above, with some of the server's services replaced (a mail sender that records what it is given, say).</summary>
+    HttpClient CreateClientWith(IReadOnlyDictionary<string, string?> configuration, Action<IServiceCollection> services);
+
     IServiceProvider Services { get; }
 }
 
@@ -45,6 +48,15 @@ public abstract class ServerFixture : IAsyncLifetime, IServerFixture
     public HttpClient CreateClientWith(IReadOnlyDictionary<string, string?> configuration) =>
         _factory!
             .WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(configuration)))
+            .CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+
+    public HttpClient CreateClientWith(IReadOnlyDictionary<string, string?> configuration, Action<IServiceCollection> services) =>
+        _factory!
+            .WithWebHostBuilder(builder =>
+            {
+                builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(configuration));
+                builder.ConfigureServices(services);
+            })
             .CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
 
     public IServiceProvider Services => _factory!.Services;

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using OpenIddict.Abstractions;
+using static Authway.Server.AdminRequest;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Authway.Server;
@@ -234,59 +235,7 @@ internal static class ClientEndpoints
         });
     }
 
-    // ---- reading and writing the request --------------------------------------------------
-
-    /// <summary>
-    /// The tenant a call names — in the body and in <c>X-Tenant-ID</c>, which must agree — is the one
-    /// tenant this installation has, or it does not exist. A call that names none is about it too: the
-    /// contract asks a caller to name a tenant only when it administers several.
-    /// </summary>
-    private static IResult? TenantRefusal(HttpContext context, JsonElement? body)
-    {
-        var named = new List<string>();
-        if (body is { } b && String(b, "tenant_id") is { Length: > 0 } fromBody)
-        {
-            named.Add(fromBody);
-        }
-
-        if (context.Request.Headers["X-Tenant-ID"].ToString() is { Length: > 0 } fromHeader)
-        {
-            named.Add(fromHeader);
-        }
-
-        if (context.Request.Query["tenant_id"].ToString() is { Length: > 0 } fromQuery)
-        {
-            named.Add(fromQuery);
-        }
-
-        var theTenant = AdminEndpoints.DefaultTenantId.ToString();
-        if (named.Count > 1 && named.Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1 && body is not null)
-        {
-            return Refuse("invalid_request", "The body and the X-Tenant-ID header name different tenants.", "tenant_id");
-        }
-
-        return named.Any(n => !string.Equals(n, theTenant, StringComparison.OrdinalIgnoreCase))
-            ? Problems.Refuse(StatusCodes.Status404NotFound, "not_found", "There is no such tenant.")
-            : null;
-    }
-
-    private static async Task<(JsonElement? Body, IResult? Refusal)> ReadBodyAsync(HttpRequest request)
-    {
-        try
-        {
-            using var document = await JsonDocument.ParseAsync(request.Body);
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                return (null, Refuse("invalid_request", "The body must be a JSON object."));
-            }
-
-            return (document.RootElement.Clone(), null);
-        }
-        catch (JsonException)
-        {
-            return (null, Refuse("invalid_request", "The body is not valid JSON."));
-        }
-    }
+    // ---- this resource ------------------------------------------------------------------
 
     private static async Task<(object? Application, IResult? Refusal)> FindAsync(IOpenIddictApplicationManager applications, string id)
     {
@@ -300,15 +249,6 @@ internal static class ClientEndpoints
             ? (null, Problems.Refuse(StatusCodes.Status404NotFound, "not_found", "There is no such client."))
             : (application, null);
     }
-
-    private static IResult Refuse(string code, string detail, string? field = null) =>
-        Problems.Refuse(StatusCodes.Status400BadRequest, code, detail, field: field);
-
-    private static string? String(JsonElement body, string name) =>
-        body.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
-
-    private static bool? Bool(JsonElement body, string name) =>
-        body.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.GetBoolean() : null;
 
     private static string NewSecret() => WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
 

@@ -14,11 +14,15 @@ internal static class AdminEndpoints
     /// <summary>The one tenant, with the id every implementation gives its default tenant.</summary>
     public static readonly Guid DefaultTenantId = new("00000000-0000-0000-0000-000000000001");
 
+    /// <summary>What the one tenant is called.</summary>
+    public const string DefaultTenantName = "Default";
+
     public static void Map(IEndpointRouteBuilder app)
     {
         var admin = app.MapGroup("/api/v1").AddEndpointFilter<AdminAuth>();
         admin.MapGet("/tenants", ListTenants);
         ClientEndpoints.Map(admin);
+        InvitationEndpoints.Map(admin);
     }
 
     private static IResult ListTenants() => Results.Json(new[]
@@ -26,7 +30,7 @@ internal static class AdminEndpoints
         new Dictionary<string, object>
         {
             ["id"] = DefaultTenantId.ToString(),
-            ["name"] = "Default",
+            ["name"] = DefaultTenantName,
             ["slug"] = "default",
             ["active"] = true,
             ["is_system"] = false,

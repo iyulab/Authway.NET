@@ -19,6 +19,9 @@ public class AuthwayDbContext(DbContextOptions<AuthwayDbContext> options)
     /// <summary>The keys ASP.NET Core's data protection keeps its secrets under.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
+    /// <summary>The invitations to sign up.</summary>
+    public DbSet<Invitation> Invitations => Set<Invitation>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -32,5 +35,19 @@ public class AuthwayDbContext(DbContextOptions<AuthwayDbContext> options)
         builder.Entity<IdentityUserToken<Guid>>().ToTable("user_tokens");
         builder.Entity<IdentityRoleClaim<Guid>>().ToTable("role_claims");
         builder.Entity<DataProtectionKey>().ToTable("data_protection_keys");
+
+        builder.Entity<Invitation>(invitation =>
+        {
+            invitation.ToTable("invitations");
+            invitation.HasKey(i => i.Id);
+            invitation.Property(i => i.Email).HasMaxLength(320);
+            invitation.Property(i => i.NormalizedEmail).HasMaxLength(320);
+            invitation.Property(i => i.InviterName).HasMaxLength(256);
+            invitation.Property(i => i.ClientId).HasMaxLength(256);
+            invitation.Property(i => i.TokenHash).HasMaxLength(64);
+            invitation.Property(i => i.Status).HasMaxLength(16);
+            invitation.HasIndex(i => i.TokenHash).IsUnique();
+            invitation.HasIndex(i => new { i.NormalizedEmail, i.Status });
+        });
     }
 }
