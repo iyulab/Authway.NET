@@ -15,6 +15,7 @@ namespace Authway.Server;
 internal static class UserEndpoints
 {
     private const int MostPerPage = 100;
+    private const int MostAvatarAddress = 2048;
     private const int DefaultPerPage = 20;
 
     public static void Map(RouteGroupBuilder admin)
@@ -71,7 +72,13 @@ internal static class UserEndpoints
         return refusal ?? Results.Json(new { user = ToJson(user!) });
     }
 
-    private static async Task<IResult> UpdateAsync(string id, HttpContext context, UserManager<ApplicationUser> users, AuditTrail audit)
+    private static async Task<IResult> UpdateAsync(
+        string id,
+        HttpContext context,
+        UserManager<ApplicationUser> users,
+        IOpenIddictTokenManager tokens,
+        IOpenIddictAuthorizationManager authorizations,
+        AuditTrail audit)
     {
         var (user, notFound) = await FindAsync(users, id);
         if (notFound is not null)
@@ -85,17 +92,7 @@ internal static class UserEndpoints
             return bad;
         }
 
-        if (String(body!.Value, "avatar_url") is { Length: > 0 })
-        {
-            return Refuse("invalid_request", "This installation keeps no avatar address.", "avatar_url");
-        }
-
-        if (Bool(body.Value, "active") is false)
-        {
-            return Refuse("invalid_request", "Suspending an account is not offered by this installation.", "active");
-        }
-
-        if (body.Value.TryGetProperty("name", out var name))
+        if (body!.Value.TryGetProperty("name", out var name))
         {
             if (name.ValueKind != System.Text.Json.JsonValueKind.String)
             {
@@ -104,15 +101,51 @@ internal static class UserEndpoints
 
             // An empty name clears it.
             user!.DisplayName = string.IsNullOrWhiteSpace(name.GetString()) ? null : name.GetString()!.Trim();
-            var updated = await users.UpdateAsync(user);
-            if (!updated.Succeeded)
+        }
+
+        if (body.Value.TryGetProperty("avatar_url", out var avatar))
+        {
+            if (avatar.ValueKind != System.Text.Json.JsonValueKind.String || avatar.GetString()!.Length > MostAvatarAddress)
             {
-                return Refuse("invalid_request", updated.Errors.First().Description, "name");
+                return Refuse("invalid_request", $"A picture address is a string of at most {MostAvatarAddress} characters.", "avatar_url");
             }
+
+            // An empty address clears it.
+            user!.AvatarUrl = string.IsNullOrWhiteSpace(avatar.GetString()) ? null : avatar.GetString()!.Trim();
+        }
+
+        var wasSuspended = user!.Suspended;
+        if (body.Value.TryGetProperty("active", out var active))
+        {
+            if (active.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+            {
+                return Refuse("invalid_request", "active is true or false.", "active");
+            }
+
+            user.Suspended = active.ValueKind == System.Text.Json.JsonValueKind.False;
+        }
+
+        var updated = await users.UpdateAsync(user);
+        if (!updated.Succeeded)
+        {
+            return Refuse("invalid_request", updated.Errors.First().Description);
+        }
+
+        if (user.Suspended && !wasSuspended)
+        {
+            // The sessions the person had are over, and what they were given stops working with them.
+            await users.UpdateSecurityStampAsync(user);
+            await tokens.RevokeBySubjectAsync(id);
+            await authorizations.RevokeBySubjectAsync(id);
+            await audit.RecordAsync(context, AuditActions.UserSuspended, "user", id, severity: AuditTrail.Warning);
+        }
+        else if (!user.Suspended && wasSuspended)
+        {
+            await audit.RecordAsync(context, AuditActions.UserReactivated, "user", id);
         }
 
         await audit.RecordAsync(context, AuditActions.UserUpdated, "user", id);
-        return Results.Json(new { message = "User updated.", user = ToJson(user!) });
+        return Results.Json(new { message = "User updated.", user = ToJson(user) });
     }
 
     private static async Task<IResult> DeleteAsync(
@@ -164,7 +197,8 @@ internal static class UserEndpoints
             ["tenant_id"] = AdminEndpoints.DefaultTenantId.ToString(),
             ["email"] = user.Email,
             ["email_verified"] = user.EmailConfirmed,
-            ["active"] = !(user.LockoutEnd is { } lockedUntil && lockedUntil > DateTimeOffset.UtcNow),
+            ["active"] = !user.Suspended && !(user.LockoutEnd is { } lockedUntil && lockedUntil > DateTimeOffset.UtcNow),
+            ["avatar_url"] = user.AvatarUrl ?? string.Empty,
             ["connections"] = Array.Empty<string>(),
             ["totp_enabled"] = false,
             ["last_login_at"] = null,

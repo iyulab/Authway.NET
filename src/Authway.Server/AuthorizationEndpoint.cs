@@ -39,6 +39,12 @@ internal static class AuthorizationEndpoint
         var application = await applications.FindByClientIdAsync(request.ClientId!)
             ?? throw new InvalidOperationException("The application details cannot be found.");
 
+        // An application an administrator has turned off is handed an error, not a sign-in form.
+        if (!await applications.IsOnAsync(application))
+        {
+            return Refuse(Errors.UnauthorizedClient, "This application is turned off.");
+        }
+
         var session = await context.AuthenticateAsync(IdentityConstants.ApplicationScheme);
         var authenticatedAt = AuthTime.Of(session);
 

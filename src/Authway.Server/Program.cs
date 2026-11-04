@@ -132,6 +132,16 @@ builder.Services.AddOpenIddict()
                 return default;
             }).SetOrder(int.MaxValue - 1));
 
+        // An application is registered for the resource servers its tokens are for (its `audience`), which the token
+        // endpoint holds a request to: OpenIddict's per-application permissions for them are not used, and a request
+        // may name the resource server (`audience`, as the contract has it) outside a token exchange.
+        options.IgnoreAudiencePermissions();
+        options.RemoveEventHandler(OpenIddict.Server.OpenIddictServerHandlers.Exchange.ValidateAudienceParameter.Descriptor);
+        options.RemoveEventHandler(OpenIddict.Server.OpenIddictServerHandlers.Exchange.ValidateAudiences.Descriptor);
+
+        // The contract's `aud` is a list even when it names one resource server.
+        options.Configure(server => server.JsonWebTokenHandler = new AudienceAsListTokenHandler());
+
         // A refresh token is used once: the one that was exchanged is not accepted again, not even for a
         // while (the default leeway lets a retry through, and a stolen token with it).
         options.SetRefreshTokenReuseLeeway(TimeSpan.Zero);

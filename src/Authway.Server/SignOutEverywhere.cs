@@ -29,7 +29,7 @@ internal static class SignOutEverywhere
 
         // The subject of a token an application holds for itself is the application, not a person.
         var user = subject is not null && Guid.TryParse(subject, out _) ? await users.FindByIdAsync(subject) : null;
-        if (user is null || await users.IsLockedOutAsync(user))
+        if (user is null || !await users.CanBeUsedAsync(user))
         {
             context.Response.Headers.WWWAuthenticate = "Bearer";
             return Problems.Refuse(StatusCodes.Status401Unauthorized, "unauthorized", "A person's access token is required.");

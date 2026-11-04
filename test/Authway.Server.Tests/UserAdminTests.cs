@@ -45,7 +45,7 @@ public abstract partial class ServerTests
     }
 
     [Fact]
-    public async Task APerson_IsRenamed_AndWhatIsNotKeptHereIsRefused()
+    public async Task APerson_IsRenamed_AndANameThatIsNotAStringIsRefused()
     {
         var admin = AdminClient(AdminKey);
         var (id, _) = await NewPersonAsync();
@@ -54,8 +54,7 @@ public abstract partial class ServerTests
         Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
         Assert.Equal("A New Name", (await BodyOfAsync(await admin.GetAsync(UserAt(id)))).GetProperty("user").GetProperty("name").GetString());
 
-        await AssertRefusedAsync(await admin.PutAsJsonAsync(UserAt(id), new { avatar_url = "https://img.example.test/a.png" }), HttpStatusCode.BadRequest, "invalid_request", "avatar_url");
-        await AssertRefusedAsync(await admin.PutAsJsonAsync(UserAt(id), new { active = false }), HttpStatusCode.BadRequest, "invalid_request", "active");
+        await AssertRefusedAsync(await admin.PutAsJsonAsync(UserAt(id), new { name = 7 }), HttpStatusCode.BadRequest, "invalid_request", "name");
 
         var cleared = await admin.PutAsJsonAsync(UserAt(id), new { name = string.Empty });
         Assert.False((await BodyOfAsync(cleared)).GetProperty("user").TryGetProperty("name", out _));

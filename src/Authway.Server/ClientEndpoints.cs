@@ -151,7 +151,13 @@ internal static class ClientEndpoints
         return Results.Json(response, statusCode: StatusCodes.Status201Created);
     }
 
-    private static async Task<IResult> UpdateAsync(string id, HttpContext context, IOpenIddictApplicationManager applications, IOpenIddictAuthorizationManager authorizations, AuditTrail audit)
+    private static async Task<IResult> UpdateAsync(
+        string id,
+        HttpContext context,
+        IOpenIddictApplicationManager applications,
+        IOpenIddictAuthorizationManager authorizations,
+        IOpenIddictTokenManager tokens,
+        AuditTrail audit)
     {
         var (application, notFound) = await FindAsync(applications, id);
         if (notFound is not null)
@@ -169,6 +175,7 @@ internal static class ClientEndpoints
         await applications.PopulateAsync(descriptor, application!);
         var spec = ClientSpec.From(descriptor);
         var skippedConsent = spec.SkipConsent;
+        var wasOn = spec.Active;
 
         if (Bool(body!.Value, "public") is { } isPublic && isPublic != spec.Public)
         {
@@ -192,6 +199,13 @@ internal static class ClientEndpoints
         // is not an answer of the person's, so the answers kept for it are withdrawn and the next request asks.
         if (skippedConsent && !spec.SkipConsent)
         {
+            await authorizations.RevokeByApplicationIdAsync(id);
+        }
+
+        // A client turned off keeps no token in force, so turning it on again does not bring back the sessions it had.
+        if (wasOn && !spec.Active)
+        {
+            await tokens.RevokeByApplicationIdAsync(id);
             await authorizations.RevokeByApplicationIdAsync(id);
         }
 
@@ -312,6 +326,11 @@ internal static class ClientEndpoints
         if (Bool(body, "skip_logout_consent") is { } skipLogoutConsent)
         {
             spec.SkipLogoutConsent = skipLogoutConsent;
+        }
+
+        if (Bool(body, "active") is { } active)
+        {
+            spec.Active = active;
         }
 
         if (Strings(body, "redirect_uris", out var redirectUris) is { } badRedirects)
@@ -473,9 +492,7 @@ internal static class ClientEndpoints
             return Refuse("invalid_backchannel_logout_uri", "Back-channel logout is not offered by this installation.", "backchannel_logout_uri");
         }
 
-        return Bool(body, "active") is false
-            ? Refuse("invalid_request", "Turning a client off is not offered by this installation.", "active")
-            : null;
+        return null;
     }
 
     /// <summary>What a client must be, taken as a whole.</summary>
@@ -554,7 +571,7 @@ internal static class ClientEndpoints
             ["enabled_auth_providers"] = spec.SignInMethods,
             ["skip_consent"] = spec.SkipConsent,
             ["skip_logout_consent"] = spec.SkipLogoutConsent,
-            ["active"] = true,
+            ["active"] = spec.Active,
             ["initiate_login_uri"] = spec.InitiateLoginUri,
             ["client_uri"] = spec.ClientUri,
             ["logo"] = spec.Logo,
@@ -587,6 +604,10 @@ internal static class ClientEndpoints
         public bool Public { get; set; }
         public bool SkipConsent { get; set; }
         public bool SkipLogoutConsent { get; set; }
+
+        /// <summary>False while an administrator has turned the client off: it signs no one in and issues nothing.</summary>
+        public bool Active { get; set; } = true;
+
         public List<string> RedirectUris { get; set; } = [];
         public List<string> PostLogoutRedirectUris { get; set; } = [];
         public List<string> AllowedOrigins { get; set; } = [];
@@ -614,6 +635,7 @@ internal static class ClientEndpoints
                 Public = descriptor.ClientType == ClientTypes.Public,
                 SkipConsent = descriptor.ConsentType == ConsentTypes.Implicit,
                 SkipLogoutConsent = descriptor.Properties.TryGetValue("skip_logout_consent", out var s) && s.ValueKind == JsonValueKind.True,
+                Active = !(descriptor.Properties.TryGetValue("active", out var on) && on.ValueKind == JsonValueKind.False),
                 RedirectUris = descriptor.RedirectUris.Select(u => u.OriginalString).ToList(),
                 PostLogoutRedirectUris = descriptor.PostLogoutRedirectUris.Select(u => u.OriginalString).ToList(),
                 AllowedOrigins = List("allowed_origins"),
@@ -669,6 +691,7 @@ internal static class ClientEndpoints
 
             Set(descriptor, "description", Description);
             Set(descriptor, "skip_logout_consent", SkipLogoutConsent);
+            Set(descriptor, "active", Active);
             Set(descriptor, "allowed_origins", AllowedOrigins);
             Set(descriptor, "audience", Audience);
             Set(descriptor, "grant_types", GrantTypes);

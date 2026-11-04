@@ -2,6 +2,7 @@ using Authway.Data;
 using Authway.Server.Flows;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using OpenIddict.Abstractions;
 
 namespace Authway.Server;
 
@@ -60,12 +61,20 @@ internal static class LoginFlowEndpoints
         SignInManager<ApplicationUser> signIn,
         IPasswordHasher<ApplicationUser> hasher,
         TimeProvider time,
+        IOpenIddictApplicationManager applications,
         AuditTrail audit)
     {
         var state = store.Find(flow, FlowKind.Login, out var open);
         if (state != FlowState.Open)
         {
             return state == FlowState.Unknown ? Problems.UnknownFlow() : Problems.ExpiredFlow();
+        }
+
+        // A sign-in already under way when an administrator turned the application off does not get through.
+        if (await applications.FindByClientIdAsync(open!.ClientId) is { } application && !await applications.IsOnAsync(application))
+        {
+            store.Complete(flow);
+            return Problems.Refuse(StatusCodes.Status403Forbidden, "unauthorized_client", "This application is turned off.");
         }
 
         if (string.IsNullOrWhiteSpace(body?.Email) || string.IsNullOrEmpty(body.Password))
@@ -92,6 +101,14 @@ internal static class LoginFlowEndpoints
             await audit.RecordAsync(context, AuditActions.UserLoginFailed, "user", user.Id.ToString(), success: false, severity: AuditTrail.Warning,
                 error: result.IsLockedOut ? "locked out" : "wrong password", actorId: user.Id, actorEmail: user.Email);
             return InvalidCredentials();
+        }
+
+        // The right password is refused for an account an administrator has suspended; a wrong one says nothing of it.
+        if (user.Suspended)
+        {
+            await audit.RecordAsync(context, AuditActions.UserLoginFailed, "user", user.Id.ToString(), success: false, severity: AuditTrail.Warning,
+                error: "suspended", actorId: user.Id, actorEmail: user.Email);
+            return Problems.Refuse(StatusCodes.Status403Forbidden, "account_suspended", "This account has been suspended.");
         }
 
         await signIn.SignInAsync(user, AuthTime.Of(body.Remember, time.GetUtcNow()));

@@ -40,4 +40,4 @@ something it does not offer is refused with the code the contract names.
 Start the server and an SMTP capture service (MailHog), then run the suite from `packages/conformance` with
 `CONFORMANCE_ISSUER`, `CONFORMANCE_API`, `CONFORMANCE_ADMIN_KEY` and `CONFORMANCE_MAIL_API` set; its
 `README.md` describes what a provider must offer to be run against. Scenarios that need more than this
-installation has (several tenants, other sign-in providers) read the capabilities and are skipped.
+installation has (several tenants, other sign-in providers) read the capabilities and are skipped. The suite signs in and accepts invitations much faster than a person does, so run the server with `Authway:Limits:SignInPerMinute` raised (a few thousand) for it.

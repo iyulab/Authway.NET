@@ -18,7 +18,7 @@ internal static class Identities
     /// for. The access token says who and how to reach them; the ID token says
     /// what the application asked about them (<c>email</c>, <c>profile</c>).
     /// </summary>
-    public static ClaimsIdentity Of(ApplicationUser user, IEnumerable<string> scopes, DateTimeOffset authenticatedAt)
+    public static ClaimsIdentity Of(ApplicationUser user, IEnumerable<string> scopes, DateTimeOffset authenticatedAt, IEnumerable<string>? audiences = null)
     {
         var identity = new ClaimsIdentity(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme, Claims.Name, Claims.Role);
         identity.SetClaim(Claims.Subject, user.Id.ToString());
@@ -30,6 +30,13 @@ internal static class Identities
         identity.AddClaim(new Claim(Claims.AuthenticationMethodReference, "[\"pwd\"]", "JSON_ARRAY"));
         identity.AddClaim(new Claim(Claims.AuthenticationTime, authenticatedAt.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
         identity.SetScopes(scopes);
+
+        // The resource servers the application is registered for: a resource server accepts a token that names it.
+        if (audiences is not null)
+        {
+            identity.SetResources(audiences);
+        }
+
         identity.SetDestinations(DestinationsOf);
         return identity;
     }
@@ -44,6 +51,7 @@ internal static class Identities
                 yield return Destinations.IdentityToken;
                 break;
             case Claims.AuthenticationTime:
+                yield return Destinations.AccessToken;
                 yield return Destinations.IdentityToken;
                 break;
             case TenantId:

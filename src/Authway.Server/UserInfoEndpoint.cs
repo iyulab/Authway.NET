@@ -21,7 +21,7 @@ internal static class UserInfoEndpoint
             ?? throw new InvalidOperationException("The access token cannot be read.");
 
         var user = await users.FindByIdAsync(principal.GetClaim(Claims.Subject) ?? string.Empty);
-        if (user is null || await users.IsLockedOutAsync(user))
+        if (user is null || !await users.CanBeUsedAsync(user))
         {
             // A token outlives an account that has since been removed or locked; it stops being good for this.
             return Results.Challenge(

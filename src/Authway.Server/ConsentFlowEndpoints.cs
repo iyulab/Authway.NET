@@ -60,6 +60,12 @@ internal static class ConsentFlowEndpoints
 
         var application = await applications.FindByClientIdAsync(open.ClientId)
             ?? throw new InvalidOperationException("The application details cannot be found.");
+        if (!await applications.IsOnAsync(application))
+        {
+            store.Complete(flow);
+            return Problems.Refuse(StatusCodes.Status403Forbidden, "unauthorized_client", "This application is turned off.");
+        }
+
         var consent = await consents.GrantAsync(user!.Id.ToString(), application, granted, keep: body!.Remember);
 
         // The request comes back with the answer that was just given, and with nothing else to go by.

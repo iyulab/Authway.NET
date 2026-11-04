@@ -30,7 +30,11 @@ public class AuthwayDbContext(DbContextOptions<AuthwayDbContext> options)
         base.OnModelCreating(builder);
 
         // Table names follow the rest of Authway: lower case, plural, no prefix of a framework.
-        builder.Entity<ApplicationUser>().ToTable("users");
+        builder.Entity<ApplicationUser>(user =>
+        {
+            user.ToTable("users");
+            user.Property(u => u.AvatarUrl).HasMaxLength(2048);
+        });
         builder.Entity<IdentityRole<Guid>>().ToTable("roles");
         builder.Entity<IdentityUserRole<Guid>>().ToTable("user_roles");
         builder.Entity<IdentityUserClaim<Guid>>().ToTable("user_claims");
