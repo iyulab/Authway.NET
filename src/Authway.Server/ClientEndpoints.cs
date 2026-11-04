@@ -36,11 +36,39 @@ internal static class ClientEndpoints
     public static void Map(RouteGroupBuilder admin)
     {
         admin.MapGet("/clients", ListAsync);
-        admin.MapPost("/clients", CreateAsync);
+        admin.MapPost("/clients/sync-hydra", SyncAsync);
+        admin.MapPost("/clients", CreateAsync).AddEndpointFilter(RereadOrigins);
         admin.MapGet("/clients/{id}", GetAsync);
-        admin.MapPut("/clients/{id}", UpdateAsync);
-        admin.MapDelete("/clients/{id}", DeleteAsync);
+        admin.MapPut("/clients/{id}", UpdateAsync).AddEndpointFilter(RereadOrigins);
+        admin.MapDelete("/clients/{id}", DeleteAsync).AddEndpointFilter(RereadOrigins);
         admin.MapPost("/clients/{id}/regenerate-secret", RegenerateSecretAsync);
+    }
+
+    /// <summary>
+    /// Reconciling the authorization server with what Authway stores: here the authorization server is this process
+    /// and keeps the clients where they are stored, so every client is in step by being stored.
+    /// </summary>
+    private static async Task<IResult> SyncAsync(IOpenIddictApplicationManager applications) =>
+        Results.Json(new Dictionary<string, object> { ["message"] = "Every client is in step: the authorization server is this process.", ["synced"] = await applications.CountAsync(), ["failed"] = 0 });
+
+    /// <summary>The logo the application registered, to show beside its name; <c>null</c> when it has none.</summary>
+    internal static async Task<string?> LogoOfAsync(IOpenIddictApplicationManager applications, string clientId)
+    {
+        if (await applications.FindByClientIdAsync(clientId) is not { } application)
+        {
+            return null;
+        }
+
+        var properties = await applications.GetPropertiesAsync(application);
+        return properties.TryGetValue("logo", out var logo) && logo.ValueKind == JsonValueKind.String && logo.GetString() is { Length: > 0 } address ? address : null;
+    }
+
+    /// <summary>A client changed, so the origins the clients registered are read again (see <see cref="RegisteredOrigins"/>).</summary>
+    private static async ValueTask<object?> RereadOrigins(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var answer = await next(context);
+        context.HttpContext.RequestServices.GetRequiredService<RegisteredOrigins>().Invalidate();
+        return answer;
     }
 
     // ---- the calls ------------------------------------------------------------------------

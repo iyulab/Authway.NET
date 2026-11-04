@@ -23,7 +23,7 @@ internal static class ConsentFlowEndpoints
         flows.MapPost("/{flow}/reject", RejectAsync).RefuseCrossSite();
     }
 
-    private static async Task<IResult> GetAsync(string flow, HttpContext context, IFlowStore store, UserManager<ApplicationUser> users)
+    private static async Task<IResult> GetAsync(string flow, HttpContext context, IFlowStore store, UserManager<ApplicationUser> users, IOpenIddictApplicationManager applications)
     {
         var (refusal, open, user) = await ResolveAsync(flow, context, store, users);
         if (refusal is not null)
@@ -32,7 +32,7 @@ internal static class ConsentFlowEndpoints
         }
 
         return Results.Json(
-            new ConsentForm("form", open!.Id, open.ClientName, open.RequestedScope, new ConsentUser(user!.Email!, user.DisplayName)),
+            new ConsentForm("form", open!.Id, open.ClientName, await ClientEndpoints.LogoOfAsync(applications, open.ClientId), open.RequestedScope, new ConsentUser(user!.Email!, user.DisplayName)),
             LoginFlowJson.Options);
     }
 
@@ -51,9 +51,10 @@ internal static class ConsentFlowEndpoints
             return refusal;
         }
 
-        // The person may allow less than was asked for, never more; and without `openid` there is no sign-in to speak of.
-        var granted = (body?.GrantScope ?? []).Distinct().ToList();
-        if (granted.Count == 0 || granted.Except(open!.RequestedScope).Any() || (open.RequestedScope.Contains(Scopes.OpenId) && !granted.Contains(Scopes.OpenId)))
+        // The person may allow less than was asked for, never more: what the answer names beyond the request is not
+        // granted. Without `openid` there is no sign-in to speak of.
+        var granted = (body?.GrantScope ?? []).Distinct().Where(open!.RequestedScope.Contains).ToList();
+        if (granted.Count == 0 || (open.RequestedScope.Contains(Scopes.OpenId) && !granted.Contains(Scopes.OpenId)))
         {
             return Problems.Refuse(StatusCodes.Status400BadRequest, "invalid_request", "Choose what to allow from what the application asked for.");
         }
@@ -114,5 +115,5 @@ internal static class ConsentFlowEndpoints
 
     private sealed record ConsentUser(string Email, string? Name);
 
-    private sealed record ConsentForm(string Next, string Flow, string ClientName, IReadOnlyList<string> RequestedScope, ConsentUser User);
+    private sealed record ConsentForm(string Next, string Flow, string ClientName, string? ClientLogoUri, IReadOnlyList<string> RequestedScope, ConsentUser User);
 }

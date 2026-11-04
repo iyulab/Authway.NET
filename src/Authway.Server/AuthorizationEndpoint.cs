@@ -68,7 +68,8 @@ internal static class AuthorizationEndpoint
                 await applications.GetDisplayNameAsync(application) ?? request.ClientId!,
                 request.GetScopes(),
                 ResumeUrl(context, PromptValues.Login),
-                HintsOf(request));
+                HintsOf(request),
+                rejectTo: ErrorTo(request, Errors.InvalidRequest, "The sign-in method is not available for this application."));
             return Results.Redirect($"{LoginScreen}?flow={Uri.EscapeDataString(flow.Id)}");
         }
 
@@ -109,7 +110,7 @@ internal static class AuthorizationEndpoint
                 ResumeUrl(context, PromptValues.Consent),
                 HintsOf(request),
                 subject,
-                rejectTo: Denied(request));
+                rejectTo: ErrorTo(request, Errors.AccessDenied, "The user denied the request."));
             return Results.Redirect($"{ConsentScreen}?flow={Uri.EscapeDataString(ask.Id)}");
         }
 
@@ -153,12 +154,13 @@ internal static class AuthorizationEndpoint
     }
 
     /// <summary>Where the application is told the person said no.</summary>
-    private static string Denied(OpenIddictRequest request)
+    /// <summary>Where the browser goes when the flow ends without a code: back to the application, with the error.</summary>
+    private static string ErrorTo(OpenIddictRequest request, string error, string description)
     {
         var parameters = new Dictionary<string, string?>
         {
-            [Parameters.Error] = Errors.AccessDenied,
-            [Parameters.ErrorDescription] = "The user denied the request.",
+            [Parameters.Error] = error,
+            [Parameters.ErrorDescription] = description,
             [Parameters.State] = request.State,
         };
         return QueryHelpers.AddQueryString(request.RedirectUri!, parameters.Where(p => !string.IsNullOrEmpty(p.Value)));

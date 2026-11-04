@@ -23,10 +23,11 @@ internal static class LoginFlowEndpoints
     {
         var flows = app.MapGroup("/api/v1/login-flows");
         flows.MapGet("/{flow}", GetAsync);
+        flows.MapGet("/{flow}/social/{provider}", SocialAsync);
         flows.MapPost("/{flow}/password", SubmitPasswordAsync).RefuseCrossSite().RequireRateLimiting(SignInLimit.Policy);
     }
 
-    private static async Task<IResult> GetAsync(string flow, HttpContext context, IFlowStore store)
+    private static async Task<IResult> GetAsync(string flow, HttpContext context, IFlowStore store, IOpenIddictApplicationManager applications)
     {
         var state = store.Find(flow, FlowKind.Login, out var open);
         if (state != FlowState.Open)
@@ -47,9 +48,26 @@ internal static class LoginFlowEndpoints
             "form",
             open!.Id,
             open.ClientName,
+            await ClientEndpoints.LogoOfAsync(applications, open.ClientId),
             open.RequestedScope,
             new LoginFormClient(open.ClientId, SignInMethods),
             HintsOf(open)), LoginFlowJson.Options);
+    }
+
+    /// <summary>
+    /// Signing in with another provider starts as a page navigation. None is offered here, so the flow it was
+    /// started on ends and the browser goes back to the application, which is told the request cannot be met.
+    /// </summary>
+    private static IResult SocialAsync(string flow, IFlowStore store)
+    {
+        var state = store.Find(flow, FlowKind.Login, out var open);
+        if (state != FlowState.Open)
+        {
+            return state == FlowState.Unknown ? Problems.UnknownFlow() : Problems.ExpiredFlow();
+        }
+
+        store.Complete(flow);
+        return Results.Redirect(open!.RejectTo ?? open.ContinueTo);
     }
 
     private static async Task<IResult> SubmitPasswordAsync(
@@ -154,6 +172,7 @@ internal static class LoginFlowEndpoints
         string Next,
         string Flow,
         string ClientName,
+        string? ClientLogoUri,
         IReadOnlyList<string> RequestedScope,
         LoginFormClient Client,
         LoginFormHints? Hints);

@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Primitives;
-using OpenIddict.Abstractions;
 
 namespace Authway.Server;
 
@@ -30,6 +29,16 @@ internal static class BrowserOrigins
         var path = context.Request.Path.Value ?? string.Empty;
         if (origin.Length == 0)
         {
+            // What is open to every origin says so to a caller that did not name one, too: a cache in between may serve it to any page.
+            if (OpenPrefixes.Any(prefix => path.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                context.Response.OnStarting(() =>
+                {
+                    context.Response.Headers.AccessControlAllowOrigin = "*";
+                    return Task.CompletedTask;
+                });
+            }
+
             await next();
             return;
         }
@@ -40,7 +49,7 @@ internal static class BrowserOrigins
             allow = "*";
         }
         else if (RegisteredPrefixes.Any(prefix => path.StartsWith(prefix, StringComparison.Ordinal))
-            && await IsRegisteredAsync(context.RequestServices.GetRequiredService<IOpenIddictApplicationManager>(), origin))
+            && await context.RequestServices.GetRequiredService<RegisteredOrigins>().ContainsAsync(origin))
         {
             allow = origin;
         }
@@ -77,20 +86,4 @@ internal static class BrowserOrigins
 
         await next();
     });
-
-    private static async Task<bool> IsRegisteredAsync(IOpenIddictApplicationManager applications, string origin)
-    {
-        await foreach (var application in applications.ListAsync())
-        {
-            var properties = await applications.GetPropertiesAsync(application);
-            if (properties.TryGetValue("allowed_origins", out var listed)
-                && listed.ValueKind == System.Text.Json.JsonValueKind.Array
-                && listed.EnumerateArray().Any(o => o.ValueKind == System.Text.Json.JsonValueKind.String && string.Equals(o.GetString(), origin, StringComparison.OrdinalIgnoreCase)))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

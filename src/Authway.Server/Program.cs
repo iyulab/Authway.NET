@@ -66,6 +66,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 
 builder.Services.AddAuthwayMail();
+builder.Services.AddSingleton<RegisteredOrigins>();
 builder.Services.AddSingleton<MailQueue>();
 builder.Services.AddHostedService(services => services.GetRequiredService<MailQueue>());
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -193,7 +194,15 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "authway" }));
+app.MapGet("/health", (AuthwayDbContext db) => Results.Json(new Dictionary<string, object>
+{
+    ["status"] = "ok",
+    ["service"] = "authway",
+    ["version"] = BootstrapConfig.Version,
+    // The migrations this build ships, oldest first: a deployment checks the database against them.
+    ["migrations"] = db.Database.GetMigrations().ToArray(),
+    ["timestamp"] = DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+}));
 
 app.MapMethods("/connect/authorize", [HttpMethods.Get, HttpMethods.Post], AuthorizationEndpoint.HandleAsync).DisableAntiforgery();
 app.MapPost("/connect/token", TokenEndpoint.HandleAsync).DisableAntiforgery();

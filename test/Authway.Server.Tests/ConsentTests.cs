@@ -14,7 +14,7 @@ public abstract partial class ServerTests
     private static readonly string[] Everything = ["openid", "email", "profile", "offline_access"];
     private static readonly string[] SignInAndEmail = ["openid", "email"];
     private static readonly string[] SignInOnly = ["openid"];
-    private static readonly string[] MoreThanAsked = ["openid", "address"];
+    private static readonly string[] MoreThanAsked = ["openid", "email", "address"];
     private static readonly string[] NoSignIn = ["email"];
 
     [Fact]
@@ -50,22 +50,22 @@ public abstract partial class ServerTests
     }
 
     [Fact]
-    public async Task APersonMayAllowLessThanWasAskedFor_ButNotMore()
+    public async Task APersonMayAllowLessThanWasAskedFor_AndNothingBeyondIsGranted()
     {
         var (application, address) = await RegisterApplicationAndPersonAsync(ConsentTypes.Explicit);
         var browser = server.CreateClient(followRedirects: false);
         var pkce = Pkce.New();
         var flow = await ConsentFlowAsync(browser, application, address, pkce);
 
-        var tooMuch = await browser.PostAsJsonAsync(new Uri($"/api/v1/consent-flows/{flow}/accept", UriKind.Relative), new { grant_scope = MoreThanAsked, remember = true });
-        Assert.Equal(HttpStatusCode.BadRequest, tooMuch.StatusCode);
         var noSignIn = await browser.PostAsJsonAsync(new Uri($"/api/v1/consent-flows/{flow}/accept", UriKind.Relative), new { grant_scope = NoSignIn, remember = true });
         Assert.Equal(HttpStatusCode.BadRequest, noSignIn.StatusCode);
 
-        var code = await AcceptAsync(browser, flow, SignInAndEmail, remember: false);
+        // What the answer names beyond the request is not granted, and the answer still stands for the rest.
+        var code = await AcceptAsync(browser, flow, MoreThanAsked, remember: false);
         var tokens = await ExchangeAsync(application, code, pkce.Verifier);
         var identity = Claims(tokens.Body.GetProperty("id_token").GetString()!);
         Assert.Equal(address, identity.GetProperty("email").GetString());
+        Assert.DoesNotContain("address", tokens.Body.GetProperty("scope").GetString()!.Split(' '));
         Assert.False(identity.TryGetProperty("name", out _), "the name was not allowed");
         Assert.False(tokens.Body.TryGetProperty("refresh_token", out _), "offline access was not allowed");
     }

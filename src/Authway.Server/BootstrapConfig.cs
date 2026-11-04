@@ -8,7 +8,7 @@ namespace Authway.Server;
 /// </summary>
 internal static class BootstrapConfig
 {
-    private static readonly string Version = typeof(BootstrapConfig).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+    internal static readonly string Version = typeof(BootstrapConfig).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
     public static void Map(IEndpointRouteBuilder app) => app.MapGet("/.well-known/authway-config", (HttpContext context, IConfiguration configuration) =>
     {
