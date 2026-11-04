@@ -19,7 +19,7 @@ public sealed class MemoryFlowStore(TimeProvider time) : IFlowStore
     /// <summary>How long an id is remembered after the flow ended.</summary>
     private static readonly TimeSpan Remembered = TimeSpan.FromHours(1);
 
-    private sealed record Entry(Flow Flow, bool Completed);
+    private sealed record Entry(Flow Flow, bool Completed, int Failures = 0);
 
     private readonly ConcurrentDictionary<string, Entry> _flows = new();
 
@@ -65,6 +65,21 @@ public sealed class MemoryFlowStore(TimeProvider time) : IFlowStore
         {
             _flows[id] = entry with { Completed = true };
         }
+    }
+
+    public bool Fail(string id)
+    {
+        var ended = false;
+        _flows.AddOrUpdate(
+            id,
+            _ => throw new InvalidOperationException("The flow does not exist."),
+            (_, entry) =>
+            {
+                var failures = entry.Failures + 1;
+                ended = failures >= IFlowStore.MaxFailures;
+                return entry with { Failures = failures, Completed = entry.Completed || ended };
+            });
+        return ended;
     }
 
     private void Forget()

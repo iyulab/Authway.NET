@@ -9,19 +9,30 @@ namespace Authway.Server;
 /// </summary>
 internal static class Problems
 {
-    public static IResult Refuse(int status, string code, string detail) =>
+    public static IResult Refuse(int status, string code, string detail, int? retryAfter = null) =>
         Results.Json(
-            new Dictionary<string, object>
-            {
-                ["type"] = "about:blank",
-                ["title"] = ReasonPhrases.GetReasonPhrase(status),
-                ["status"] = status,
-                ["detail"] = detail,
-                ["code"] = code,
-            },
+            Body(status, code, detail, retryAfter),
             options: (JsonSerializerOptions?)null,
             contentType: "application/problem+json",
             statusCode: status);
+
+    public static Dictionary<string, object> Body(int status, string code, string detail, int? retryAfter = null)
+    {
+        var body = new Dictionary<string, object>
+        {
+            ["type"] = "about:blank",
+            ["title"] = ReasonPhrases.GetReasonPhrase(status),
+            ["status"] = status,
+            ["detail"] = detail,
+            ["code"] = code,
+        };
+        if (retryAfter is { } seconds)
+        {
+            body["retry_after"] = seconds;
+        }
+
+        return body;
+    }
 
     public static IResult UnknownFlow() =>
         Refuse(StatusCodes.Status400BadRequest, "invalid_flow", "This sign-in is not valid. Start again from the application.");

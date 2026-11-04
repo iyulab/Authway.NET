@@ -22,7 +22,7 @@ internal static class LoginFlowEndpoints
     {
         var flows = app.MapGroup("/api/v1/login-flows");
         flows.MapGet("/{flow}", GetAsync);
-        flows.MapPost("/{flow}/password", SubmitPasswordAsync).RefuseCrossSite();
+        flows.MapPost("/{flow}/password", SubmitPasswordAsync).RefuseCrossSite().RequireRateLimiting(SignInLimit.Policy);
     }
 
     private static async Task<IResult> GetAsync(string flow, HttpContext context, IFlowStore store)
@@ -77,12 +77,14 @@ internal static class LoginFlowEndpoints
         if (user is null)
         {
             hasher.VerifyHashedPassword(NoAccount, NoAccountHash.Value(hasher), body.Password);
+            store.Fail(flow);
             return InvalidCredentials();
         }
 
         var result = await signIn.CheckPasswordSignInAsync(user, body.Password, lockoutOnFailure: true);
         if (!result.Succeeded)
         {
+            store.Fail(flow);
             return InvalidCredentials();
         }
 

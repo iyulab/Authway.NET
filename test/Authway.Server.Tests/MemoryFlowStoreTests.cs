@@ -85,6 +85,22 @@ public class MemoryFlowStoreTests
     }
 
     [Fact]
+    public void AFlowEndsWhenItHasBeenAnsweredWrongTooOften()
+    {
+        var store = new MemoryFlowStore(new Clock());
+        var opened = Open(store);
+
+        for (var failure = 1; failure < IFlowStore.MaxFailures; failure++)
+        {
+            Assert.False(store.Fail(opened.Id));
+            Assert.Equal(FlowState.Open, store.Find(opened.Id, FlowKind.Login, out _));
+        }
+
+        Assert.True(store.Fail(opened.Id));
+        Assert.Equal(FlowState.Expired, store.Find(opened.Id, FlowKind.Login, out _));
+    }
+
+    [Fact]
     public void EveryFlowGetsAnIdOfItsOwn()
     {
         var store = new MemoryFlowStore(new Clock());

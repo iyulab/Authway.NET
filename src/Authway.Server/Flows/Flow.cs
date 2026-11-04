@@ -75,4 +75,13 @@ public interface IFlowStore
 
     /// <summary>Ends a flow: it was completed, and cannot be used again.</summary>
     void Complete(string id);
+
+    /// <summary>
+    /// Counts a failed answer to the flow. Past <see cref="MaxFailures"/> the flow ends, as if completed:
+    /// whoever is guessing has to start again from the application. Returns whether the flow ended.
+    /// </summary>
+    bool Fail(string id);
+
+    /// <summary>How many wrong answers a flow takes.</summary>
+    const int MaxFailures = 10;
 }

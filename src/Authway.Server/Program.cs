@@ -60,6 +60,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower);
 
 builder.Services.AddSingleton(TimeProvider.System);
+SignInLimit.Add(builder.Services);
 builder.Services.AddSingleton<IFlowStore, MemoryFlowStore>();
 builder.Services.AddScoped<Consents>();
 
@@ -120,6 +121,7 @@ var app = builder.Build();
 
 LoginUi.Use(app);
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
