@@ -51,6 +51,7 @@ internal static class LoginFlowEndpoints
             await ClientEndpoints.LogoOfAsync(applications, open.ClientId),
             open.RequestedScope,
             new LoginFormClient(open.ClientId, SignInMethods),
+            CapabilitiesEndpoint.InviteOnlySignup,
             HintsOf(open)), LoginFlowJson.Options);
     }
 
@@ -175,5 +176,6 @@ internal static class LoginFlowEndpoints
         string? ClientLogoUri,
         IReadOnlyList<string> RequestedScope,
         LoginFormClient Client,
+        string SignupMode,
         LoginFormHints? Hints);
 }

@@ -73,7 +73,13 @@ internal static partial class EmailEndpoints
         queue.Enqueue(
             purpose == EmailToken.Verification ? "verification" : "reset",
             (services, cancellation) => MailLinkAsync(services, address!, purpose, baseUrl, locale, cancellation));
-        return Results.Json(new { message = purpose == EmailToken.Verification ? VerificationRequested : PasswordResetRequested });
+        // A request that names an application also says how people come to have an account, whether or not this
+        // address does (see the contract's MailRequested): that is what lets the screen tell someone who gets no
+        // mail that the service is for invited people.
+        var message = purpose == EmailToken.Verification ? VerificationRequested : PasswordResetRequested;
+        return string.IsNullOrEmpty(clientId)
+            ? Results.Json(new { message })
+            : Results.Json(new { message, signup_mode = CapabilitiesEndpoint.InviteOnlySignup });
     }
 
     /// <summary>

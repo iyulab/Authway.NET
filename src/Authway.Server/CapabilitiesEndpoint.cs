@@ -8,7 +8,13 @@ namespace Authway.Server;
 /// </summary>
 internal static class CapabilitiesEndpoint
 {
-    private static readonly string[] SignupModes = ["invite_only"];
+    /// <summary>
+    /// How a person comes to have an account here: by an invitation, and no other way (the contract's
+    /// <c>SignupMode</c>). The sign-in screen is told so, to say it to someone who cannot sign in.
+    /// </summary>
+    internal const string InviteOnlySignup = "invite_only";
+
+    private static readonly string[] SignupModes = [InviteOnlySignup];
 
     public static void Map(IEndpointRouteBuilder app) => app.MapGet("/api/v1/capabilities", () => Results.Json(
         new Dictionary<string, object>

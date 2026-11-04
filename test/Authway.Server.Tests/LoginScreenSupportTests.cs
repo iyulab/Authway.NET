@@ -77,6 +77,33 @@ public abstract partial class ServerTests
     }
 
     [Fact]
+    public async Task TheSignInFlow_AndAPasswordReset_SayThatPeopleAreOnlyInvited_TheSameForEveryAddress()
+    {
+        var (application, known) = await RegisterApplicationAndPersonAsync();
+        var browser = server.CreateClient(followRedirects: false);
+
+        // The screen is told how people come to have an account here, to say so to someone who cannot sign in.
+        var flow = await StartAsync(browser, application, Pkce.New().Challenge);
+        var form = await BodyOfAsync(await browser.GetAsync(new Uri($"/api/v1/login-flows/{flow}", UriKind.Relative)));
+        Assert.Equal("invite_only", form.GetProperty("signup_mode").GetString());
+
+        // A reset that names the application says it too — alike for an address with an account and one without.
+        var client = server.CreateClient(followRedirects: true);
+        var forKnown = await client.PostAsJsonAsync(ForgotPassword, new { email = known, client_id = application });
+        var forNobody = await client.PostAsJsonAsync(ForgotPassword, new { email = $"nobody-{Guid.NewGuid():N}@example.test", client_id = application });
+        Assert.Equal(HttpStatusCode.OK, forNobody.StatusCode);
+        var answer = await forKnown.Content.ReadAsStringAsync();
+        Assert.Equal(answer, await forNobody.Content.ReadAsStringAsync());
+        Assert.Equal("invite_only", (await BodyOfAsync(forKnown)).GetProperty("signup_mode").GetString());
+
+        // A request for a new verification link says the same; with no application named there is no tenant to speak of.
+        var verification = await BodyOfAsync(await client.PostAsJsonAsync(SendVerification, new { email = known, client_id = application }));
+        Assert.Equal("invite_only", verification.GetProperty("signup_mode").GetString());
+        var anonymous = await BodyOfAsync(await client.PostAsJsonAsync(ForgotPassword, new { email = known }));
+        Assert.False(anonymous.TryGetProperty("signup_mode", out _));
+    }
+
+    [Fact]
     public async Task Reconciling_TheClientsWithTheAuthorizationServer_FindsThemInStep()
     {
         var admin = AdminClient(AdminKey);
