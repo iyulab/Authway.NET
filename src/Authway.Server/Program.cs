@@ -106,6 +106,8 @@ builder.Services.AddOpenIddict()
 
         options.RegisterScopes(Scopes.Email, Scopes.Profile, Scopes.OfflineAccess);
 
+        ErrorPage.Add(options);
+
         // A refresh token is used once: the one that was exchanged is not accepted again, not even for a
         // while (the default leeway lets a retry through, and a stolen token with it).
         options.SetRefreshTokenReuseLeeway(TimeSpan.Zero);
@@ -160,6 +162,7 @@ app.MapMethods("/connect/userinfo", [HttpMethods.Get, HttpMethods.Post], UserInf
 app.MapMethods("/connect/logout", [HttpMethods.Get, HttpMethods.Post], EndSessionEndpoint.HandleAsync).DisableAntiforgery();
 
 CapabilitiesEndpoint.Map(app);
+BootstrapConfig.Map(app);
 LoginFlowEndpoints.Map(app);
 LogoutFlowEndpoints.Map(app);
 ConsentFlowEndpoints.Map(app);

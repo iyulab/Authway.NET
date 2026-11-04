@@ -251,7 +251,7 @@ internal static partial class InvitationEndpoints
     {
         try
         {
-            var baseUrl = (configuration["Authway:Ui:BaseUrl"] ?? $"{context.Request.Scheme}://{context.Request.Host}").TrimEnd('/');
+            var baseUrl = BootstrapConfig.UiAddress(context, configuration);
             var message = Messages.Render(
                 "invitation",
                 context.Request.Headers.AcceptLanguage.ToString(),

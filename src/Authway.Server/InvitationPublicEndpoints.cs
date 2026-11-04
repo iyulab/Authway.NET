@@ -120,7 +120,7 @@ internal static class InvitationPublicEndpoints
     /// <summary>Signing in with another provider is not offered: the browser goes back to the screen and says so.</summary>
     private static IResult NoProvider(string token, HttpContext context, IConfiguration configuration)
     {
-        var baseUrl = (configuration["Authway:Ui:BaseUrl"] ?? $"{context.Request.Scheme}://{context.Request.Host}").TrimEnd('/');
+        var baseUrl = BootstrapConfig.UiAddress(context, configuration);
         return Results.Redirect($"{baseUrl}/invitation/accept?error=provider_unavailable&token={Uri.EscapeDataString(token)}");
     }
 

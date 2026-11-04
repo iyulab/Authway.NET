@@ -149,7 +149,7 @@ internal static class ClientEndpoints
         return Results.Json(response, statusCode: StatusCodes.Status201Created);
     }
 
-    private static async Task<IResult> UpdateAsync(string id, HttpContext context, IOpenIddictApplicationManager applications)
+    private static async Task<IResult> UpdateAsync(string id, HttpContext context, IOpenIddictApplicationManager applications, IOpenIddictAuthorizationManager authorizations)
     {
         var (application, notFound) = await FindAsync(applications, id);
         if (notFound is not null)
@@ -166,6 +166,7 @@ internal static class ClientEndpoints
         var descriptor = new OpenIddictApplicationDescriptor();
         await applications.PopulateAsync(descriptor, application!);
         var spec = ClientSpec.From(descriptor);
+        var skippedConsent = spec.SkipConsent;
 
         if (Bool(body!.Value, "public") is { } isPublic && isPublic != spec.Public)
         {
@@ -184,6 +185,14 @@ internal static class ClientEndpoints
 
         spec.WriteTo(descriptor);
         await applications.UpdateAsync(application!, descriptor);
+
+        // An application that was the tenant's own, and asked no one, now asks: what it was allowed while it did not ask
+        // is not an answer of the person's, so the answers kept for it are withdrawn and the next request asks.
+        if (skippedConsent && !spec.SkipConsent)
+        {
+            await authorizations.RevokeByApplicationIdAsync(id);
+        }
+
         return Results.Json(new Dictionary<string, object?>
         {
             ["client"] = await ToJsonAsync(applications, (await applications.FindByIdAsync(id))!),
@@ -407,9 +416,9 @@ internal static class ClientEndpoints
                 continue;
             }
 
-            if (address.Length > 0 && !(Uri.TryCreate(address, UriKind.Absolute, out var parsed) && parsed.Scheme == Uri.UriSchemeHttps))
+            if (address.Length > 0 && !(Uri.TryCreate(address, UriKind.Absolute, out var parsed) && parsed.Scheme == Uri.UriSchemeHttps && parsed.Fragment.Length == 0))
             {
-                return Refuse("invalid_request", "It must be an absolute https address, or empty to clear it.", member);
+                return Refuse($"invalid_{member}", "It must be an absolute https address without a fragment, or empty to clear it.", member);
             }
 
             set(address);

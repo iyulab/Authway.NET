@@ -141,6 +141,20 @@ public abstract partial class ServerTests
             HttpStatusCode.BadRequest, "provider_unavailable", "github_client_id");
     }
 
+    [Theory]
+    [InlineData("initiate_login_uri", "http://app.example.test/x")]
+    [InlineData("client_uri", "https://app.example.test/x#fragment")]
+    [InlineData("logo", "not an address")]
+    public async Task AnApplicationAddress_ThatIsNotHttps_OrHasAFragment_IsRefusedNamingTheMember(string member, string address)
+    {
+        var admin = AdminClient(AdminKey);
+        var id = (await RegisterClientAsync(admin, PublicClientBody())).GetProperty("client").GetProperty("id").GetString()!;
+
+        var response = await admin.PutAsJsonAsync(ClientAt(id), new Dictionary<string, string> { [member] = address });
+
+        await AssertRefusedAsync(response, HttpStatusCode.BadRequest, $"invalid_{member}", member);
+    }
+
     [Fact]
     public async Task AListIsAtMost100_NewestFirst_AndNamesATenantOrNone()
     {
