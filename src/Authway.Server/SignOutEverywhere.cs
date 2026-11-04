@@ -1,9 +1,6 @@
 using Authway.Data;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using OpenIddict.Abstractions;
-using OpenIddict.Validation.AspNetCore;
-using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Authway.Server;
 
@@ -24,20 +21,16 @@ internal static class SignOutEverywhere
         IOpenIddictAuthorizationManager authorizations,
         AuditTrail audit)
     {
-        var result = await context.AuthenticateAsync(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
-        var subject = result.Succeeded ? result.Principal?.GetClaim(Claims.Subject) : null;
-
-        // The subject of a token an application holds for itself is the application, not a person.
-        var user = subject is not null && Guid.TryParse(subject, out _) ? await users.FindByIdAsync(subject) : null;
-        if (user is null || !await users.CanBeUsedAsync(user))
+        var (user, _) = await UserToken.AuthenticateAsync(context, users);
+        if (user is null)
         {
-            context.Response.Headers.WWWAuthenticate = "Bearer";
-            return Problems.Refuse(StatusCodes.Status401Unauthorized, "unauthorized", "A person's access token is required.");
+            return UserToken.Unauthorized();
         }
 
+        var subject = user.Id.ToString();
         await users.UpdateSecurityStampAsync(user);
-        await tokens.RevokeBySubjectAsync(subject!);
-        await authorizations.RevokeBySubjectAsync(subject!);
+        await tokens.RevokeBySubjectAsync(subject);
+        await authorizations.RevokeBySubjectAsync(subject);
         await audit.RecordAsync(context, AuditActions.UserLogout, "user", subject, actorId: user.Id, actorEmail: user.Email,
             details: new Dictionary<string, object?> { ["scope"] = "everywhere" });
         return Results.Json(new { success = true, message = "Signed out everywhere." });

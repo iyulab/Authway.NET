@@ -216,6 +216,7 @@ ConsentFlowEndpoints.Map(app);
 AdminEndpoints.Map(app);
 InvitationPublicEndpoints.Map(app);
 EmailEndpoints.Map(app);
+AccountEndpoints.Map(app);
 SignOutEverywhere.Map(app);
 
 app.Run();
