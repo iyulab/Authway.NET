@@ -18,6 +18,7 @@ internal static class AdminEndpoints
     {
         var admin = app.MapGroup("/api/v1").AddEndpointFilter<AdminAuth>();
         admin.MapGet("/tenants", ListTenants);
+        ClientEndpoints.Map(admin);
     }
 
     private static IResult ListTenants() => Results.Json(new[]

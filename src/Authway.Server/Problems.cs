@@ -9,14 +9,14 @@ namespace Authway.Server;
 /// </summary>
 internal static class Problems
 {
-    public static IResult Refuse(int status, string code, string detail, int? retryAfter = null) =>
+    public static IResult Refuse(int status, string code, string detail, int? retryAfter = null, string? field = null) =>
         Results.Json(
-            Body(status, code, detail, retryAfter),
+            Body(status, code, detail, retryAfter, field),
             options: (JsonSerializerOptions?)null,
             contentType: "application/problem+json",
             statusCode: status);
 
-    public static Dictionary<string, object> Body(int status, string code, string detail, int? retryAfter = null)
+    public static Dictionary<string, object> Body(int status, string code, string detail, int? retryAfter = null, string? field = null)
     {
         var body = new Dictionary<string, object>
         {
@@ -29,6 +29,12 @@ internal static class Problems
         if (retryAfter is { } seconds)
         {
             body["retry_after"] = seconds;
+        }
+
+        // The member of the request at fault, when the refusal is about one.
+        if (!string.IsNullOrEmpty(field))
+        {
+            body["field"] = field;
         }
 
         return body;
