@@ -38,6 +38,15 @@ The server reads its settings from configuration (environment variables use `__`
 An installation is one tenant. What it does not offer is said by `GET /api/v1/capabilities`, and a call for
 something it does not offer is refused with the code the contract names.
 
+## Hosting
+
+`dotnet publish src/Authway.Server -c Release` writes the server and a `web.config` that runs it inside IIS
+(`hostingModel="inprocess"`, ASP.NET Core Module; an IIS installation has not been exercised in this
+repository's tests). Behind a proxy that ends TLS and forwards to the server — a load balancer, an ingress,
+nginx — set
+`Authway:Proxy:ForwardedHeaders` and name the proxies (see above). Run as a Windows Service is not supported
+yet: the server does not speak the service control protocol.
+
 ## Conformance
 
 Start the server and an SMTP capture service (MailHog), then run the suite from `packages/conformance` with
