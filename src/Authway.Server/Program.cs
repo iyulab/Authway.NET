@@ -136,6 +136,7 @@ CapabilitiesEndpoint.Map(app);
 LoginFlowEndpoints.Map(app);
 LogoutFlowEndpoints.Map(app);
 ConsentFlowEndpoints.Map(app);
+AdminEndpoints.Map(app);
 
 app.Run();
 
