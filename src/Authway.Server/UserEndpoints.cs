@@ -71,7 +71,7 @@ internal static class UserEndpoints
         return refusal ?? Results.Json(new { user = ToJson(user!) });
     }
 
-    private static async Task<IResult> UpdateAsync(string id, HttpContext context, UserManager<ApplicationUser> users)
+    private static async Task<IResult> UpdateAsync(string id, HttpContext context, UserManager<ApplicationUser> users, AuditTrail audit)
     {
         var (user, notFound) = await FindAsync(users, id);
         if (notFound is not null)
@@ -111,14 +111,17 @@ internal static class UserEndpoints
             }
         }
 
+        await audit.RecordAsync(context, AuditActions.UserUpdated, "user", id);
         return Results.Json(new { message = "User updated.", user = ToJson(user!) });
     }
 
     private static async Task<IResult> DeleteAsync(
         string id,
+        HttpContext context,
         UserManager<ApplicationUser> users,
         IOpenIddictTokenManager tokens,
-        IOpenIddictAuthorizationManager authorizations)
+        IOpenIddictAuthorizationManager authorizations,
+        AuditTrail audit)
     {
         var (user, notFound) = await FindAsync(users, id);
         if (notFound is not null)
@@ -131,9 +134,13 @@ internal static class UserEndpoints
         await tokens.RevokeBySubjectAsync(subject);
         await authorizations.RevokeBySubjectAsync(subject);
         var deleted = await users.DeleteAsync(user);
-        return deleted.Succeeded
-            ? Results.Json(new { message = "User deleted." })
-            : Problems.Refuse(StatusCodes.Status500InternalServerError, "internal_server_error", "The user could not be deleted.");
+        if (!deleted.Succeeded)
+        {
+            return Problems.Refuse(StatusCodes.Status500InternalServerError, "internal_server_error", "The user could not be deleted.");
+        }
+
+        await audit.RecordAsync(context, AuditActions.UserDeleted, "user", id, severity: AuditTrail.Warning);
+        return Results.Json(new { message = "User deleted." });
     }
 
     private static async Task<(ApplicationUser? User, IResult? Refusal)> FindAsync(UserManager<ApplicationUser> users, string id)

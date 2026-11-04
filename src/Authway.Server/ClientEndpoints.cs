@@ -79,7 +79,7 @@ internal static class ClientEndpoints
         return refusal ?? Results.Json(new { client = await ToJsonAsync(applications, application!) });
     }
 
-    private static async Task<IResult> CreateAsync(HttpContext context, IOpenIddictApplicationManager applications)
+    private static async Task<IResult> CreateAsync(HttpContext context, IOpenIddictApplicationManager applications, AuditTrail audit)
     {
         var (body, bad) = await ReadBodyAsync(context.Request);
         if (bad is not null)
@@ -135,6 +135,8 @@ internal static class ClientEndpoints
 
         spec.WriteTo(descriptor);
         var created = await applications.CreateAsync(descriptor);
+        await audit.RecordAsync(context, AuditActions.ClientCreated, "client", await applications.GetIdAsync(created),
+            details: new Dictionary<string, object?> { ["client_id"] = clientId, ["name"] = spec.Name });
 
         var response = new Dictionary<string, object?>
         {
@@ -149,7 +151,7 @@ internal static class ClientEndpoints
         return Results.Json(response, statusCode: StatusCodes.Status201Created);
     }
 
-    private static async Task<IResult> UpdateAsync(string id, HttpContext context, IOpenIddictApplicationManager applications, IOpenIddictAuthorizationManager authorizations)
+    private static async Task<IResult> UpdateAsync(string id, HttpContext context, IOpenIddictApplicationManager applications, IOpenIddictAuthorizationManager authorizations, AuditTrail audit)
     {
         var (application, notFound) = await FindAsync(applications, id);
         if (notFound is not null)
@@ -193,6 +195,7 @@ internal static class ClientEndpoints
             await authorizations.RevokeByApplicationIdAsync(id);
         }
 
+        await audit.RecordAsync(context, AuditActions.ClientUpdated, "client", id);
         return Results.Json(new Dictionary<string, object?>
         {
             ["client"] = await ToJsonAsync(applications, (await applications.FindByIdAsync(id))!),
@@ -201,7 +204,7 @@ internal static class ClientEndpoints
         });
     }
 
-    private static async Task<IResult> DeleteAsync(string id, IOpenIddictApplicationManager applications)
+    private static async Task<IResult> DeleteAsync(string id, HttpContext context, IOpenIddictApplicationManager applications, AuditTrail audit)
     {
         var (application, notFound) = await FindAsync(applications, id);
         if (notFound is not null)
@@ -210,6 +213,7 @@ internal static class ClientEndpoints
         }
 
         await applications.DeleteAsync(application!);
+        await audit.RecordAsync(context, AuditActions.ClientDeleted, "client", id);
         return Results.Json(new { message = "Client deleted." });
     }
 

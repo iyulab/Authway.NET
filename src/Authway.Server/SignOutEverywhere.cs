@@ -21,7 +21,8 @@ internal static class SignOutEverywhere
         HttpContext context,
         UserManager<ApplicationUser> users,
         IOpenIddictTokenManager tokens,
-        IOpenIddictAuthorizationManager authorizations)
+        IOpenIddictAuthorizationManager authorizations,
+        AuditTrail audit)
     {
         var result = await context.AuthenticateAsync(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
         var subject = result.Succeeded ? result.Principal?.GetClaim(Claims.Subject) : null;
@@ -37,6 +38,8 @@ internal static class SignOutEverywhere
         await users.UpdateSecurityStampAsync(user);
         await tokens.RevokeBySubjectAsync(subject!);
         await authorizations.RevokeBySubjectAsync(subject!);
+        await audit.RecordAsync(context, AuditActions.UserLogout, "user", subject, actorId: user.Id, actorEmail: user.Email,
+            details: new Dictionary<string, object?> { ["scope"] = "everywhere" });
         return Results.Json(new { success = true, message = "Signed out everywhere." });
     }
 }

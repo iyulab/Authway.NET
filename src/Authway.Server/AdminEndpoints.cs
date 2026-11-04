@@ -24,6 +24,7 @@ internal static class AdminEndpoints
         ClientEndpoints.Map(admin);
         InvitationEndpoints.Map(admin);
         UserEndpoints.Map(admin);
+        AuditEndpoints.Map(admin);
     }
 
     private static IResult ListTenants() => Results.Json(new[]
@@ -62,6 +63,8 @@ internal sealed class AdminAuth(IConfiguration configuration) : IEndpointFilter
             return Problems.Refuse(StatusCodes.Status401Unauthorized, "unauthorized", "A valid administration key is required.");
         }
 
+        // What the audit log names as the actor: nobody in particular, the key.
+        context.HttpContext.Items[AuditTrail.ActorItem] = "api_key";
         return await next(context);
     }
 

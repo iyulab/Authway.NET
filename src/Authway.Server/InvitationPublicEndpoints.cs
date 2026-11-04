@@ -64,7 +64,7 @@ internal static class InvitationPublicEndpoints
         return Results.Json(new Dictionary<string, object?> { ["invitation"] = shown, ["password_min_length"] = PasswordMinLength });
     }
 
-    private static async Task<IResult> AcceptAsync(HttpContext context, AuthwayDbContext db, UserManager<ApplicationUser> users, TimeProvider time)
+    private static async Task<IResult> AcceptAsync(HttpContext context, AuthwayDbContext db, UserManager<ApplicationUser> users, TimeProvider time, AuditTrail audit)
     {
         var (body, bad) = await ReadBodyAsync(context.Request);
         if (bad is not null)
@@ -112,6 +112,8 @@ internal static class InvitationPublicEndpoints
         }
 
         await db.Invitations.Where(i => i.Id == invitation.Id).ExecuteUpdateAsync(set => set.SetProperty(i => i.AcceptedBy, account.Id));
+        await audit.RecordAsync(context, AuditActions.UserCreated, "user", account.Id.ToString(), actorId: account.Id, actorEmail: account.Email,
+            details: new Dictionary<string, object?> { ["via"] = "invitation" });
         return Results.Json(new Dictionary<string, object>
         {
             ["message"] = "Invitation accepted.",

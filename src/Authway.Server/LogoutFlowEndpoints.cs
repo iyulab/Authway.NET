@@ -23,7 +23,8 @@ internal static class LogoutFlowEndpoints
         IFlowStore store,
         SignInManager<ApplicationUser> signIn,
         IOpenIddictTokenManager tokens,
-        IOpenIddictAuthorizationManager authorizations)
+        IOpenIddictAuthorizationManager authorizations,
+        AuditTrail audit)
     {
         var state = store.Find(flow, FlowKind.Logout, out var open);
         if (state != FlowState.Open)
@@ -48,6 +49,8 @@ internal static class LogoutFlowEndpoints
             // What the person was given in the session — across every application — stops working with it.
             await tokens.RevokeBySubjectAsync(subject);
             await authorizations.RevokeBySubjectAsync(subject);
+            await audit.RecordAsync(context, AuditActions.UserLogout, "user", subject,
+                actorId: Guid.TryParse(subject, out var person) ? person : null, actorEmail: session.Principal?.FindFirst(Claims.Email)?.Value);
         }
 
         store.Complete(flow);

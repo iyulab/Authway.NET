@@ -30,6 +30,7 @@ The server reads its settings from configuration (environment variables use `__`
 | `Authway:Mail:Smtp:Host`, `Port`, `User`, `Password`, `Tls` | The mail server. Without a host no mail is sent, and a call that wants mail says so. |
 | `Authway:Mail:From` | The sender's address. |
 | `Authway:Limits:SignInPerMinute` | How often one address may answer a sign-in (default 60). |
+| `Authway:Audit:RetentionDays` | How long audit entries are kept (default 365, at least 30); the ones past it are removed once a day. |
 
 An installation is one tenant. What it does not offer is said by `GET /api/v1/capabilities`, and a call for
 something it does not offer is refused with the code the contract names.

@@ -54,11 +54,13 @@ internal static class LoginFlowEndpoints
     private static async Task<IResult> SubmitPasswordAsync(
         string flow,
         PasswordRequest? body,
+        HttpContext context,
         IFlowStore store,
         UserManager<ApplicationUser> users,
         SignInManager<ApplicationUser> signIn,
         IPasswordHasher<ApplicationUser> hasher,
-        TimeProvider time)
+        TimeProvider time,
+        AuditTrail audit)
     {
         var state = store.Find(flow, FlowKind.Login, out var open);
         if (state != FlowState.Open)
@@ -78,6 +80,8 @@ internal static class LoginFlowEndpoints
         {
             hasher.VerifyHashedPassword(NoAccount, NoAccountHash.Value(hasher), body.Password);
             store.Fail(flow);
+            await audit.RecordAsync(context, AuditActions.UserLoginFailed, "user", null, success: false, severity: AuditTrail.Warning,
+                error: "unknown address", actorEmail: body.Email.Trim());
             return InvalidCredentials();
         }
 
@@ -85,11 +89,14 @@ internal static class LoginFlowEndpoints
         if (!result.Succeeded)
         {
             store.Fail(flow);
+            await audit.RecordAsync(context, AuditActions.UserLoginFailed, "user", user.Id.ToString(), success: false, severity: AuditTrail.Warning,
+                error: result.IsLockedOut ? "locked out" : "wrong password", actorId: user.Id, actorEmail: user.Email);
             return InvalidCredentials();
         }
 
         await signIn.SignInAsync(user, AuthTime.Of(body.Remember, time.GetUtcNow()));
         store.Complete(flow);
+        await audit.RecordAsync(context, AuditActions.UserLogin, "user", user.Id.ToString(), actorId: user.Id, actorEmail: user.Email);
         return Results.Json(new Redirect("redirect", open!.ContinueTo), LoginFlowJson.Options);
     }
 

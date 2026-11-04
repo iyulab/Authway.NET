@@ -70,6 +70,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower);
 
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<AuditTrail>();
+builder.Services.AddHostedService<AuditRetention>();
 SignInLimit.Add(builder.Services);
 builder.Services.AddSingleton<IFlowStore, MemoryFlowStore>();
 builder.Services.AddScoped<Consents>();

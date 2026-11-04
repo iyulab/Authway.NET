@@ -22,6 +22,9 @@ public class AuthwayDbContext(DbContextOptions<AuthwayDbContext> options)
     /// <summary>The invitations to sign up.</summary>
     public DbSet<Invitation> Invitations => Set<Invitation>();
 
+    /// <summary>What was done, by whom: the audit log.</summary>
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -48,6 +51,25 @@ public class AuthwayDbContext(DbContextOptions<AuthwayDbContext> options)
             invitation.Property(i => i.Status).HasMaxLength(16);
             invitation.HasIndex(i => i.TokenHash).IsUnique();
             invitation.HasIndex(i => new { i.NormalizedEmail, i.Status });
+        });
+
+        builder.Entity<AuditLog>(entry =>
+        {
+            entry.ToTable("audit_logs");
+            entry.HasKey(e => e.Id);
+            entry.Property(e => e.ActorEmail).HasMaxLength(320);
+            entry.Property(e => e.ActorType).HasMaxLength(50);
+            entry.Property(e => e.Action).HasMaxLength(100);
+            entry.Property(e => e.Severity).HasMaxLength(20);
+            entry.Property(e => e.ResourceType).HasMaxLength(100);
+            entry.Property(e => e.ResourceId).HasMaxLength(255);
+            entry.Property(e => e.IpAddress).HasMaxLength(45);
+            entry.Property(e => e.UserAgent).HasMaxLength(512);
+            // Newest first, by when, by what, by whom, by what it was about.
+            entry.HasIndex(e => e.CreatedAt);
+            entry.HasIndex(e => e.Action);
+            entry.HasIndex(e => e.ActorId);
+            entry.HasIndex(e => e.ResourceId);
         });
     }
 }
