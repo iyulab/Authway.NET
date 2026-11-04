@@ -10,6 +10,9 @@ namespace Authway.Server;
 /// <summary>What the tokens say about the person they are issued to.</summary>
 internal static class Identities
 {
+    /// <summary>The claim that says which tenant a person belongs to; always present, and the one tenant's id here.</summary>
+    public const string TenantId = "tenant_id";
+
     /// <summary>
     /// The identity a code, and the tokens it is exchanged for, are issued
     /// for. The access token says who and how to reach them; the ID token says
@@ -22,6 +25,9 @@ internal static class Identities
         identity.SetClaim(Claims.Email, user.Email);
         identity.SetClaim(Claims.EmailVerified, user.EmailConfirmed);
         identity.SetClaim(Claims.Name, user.DisplayName ?? user.Email);
+        identity.SetClaim(TenantId, AdminEndpoints.DefaultTenantId.ToString());
+        // How the person signed in, as a list — the form the claim has in the contract even with one entry.
+        identity.AddClaim(new Claim(Claims.AuthenticationMethodReference, "[\"pwd\"]", "JSON_ARRAY"));
         identity.AddClaim(new Claim(Claims.AuthenticationTime, authenticatedAt.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
         identity.SetScopes(scopes);
         identity.SetDestinations(DestinationsOf);
@@ -38,6 +44,11 @@ internal static class Identities
                 yield return Destinations.IdentityToken;
                 break;
             case Claims.AuthenticationTime:
+                yield return Destinations.IdentityToken;
+                break;
+            case TenantId:
+            case Claims.AuthenticationMethodReference:
+                yield return Destinations.AccessToken;
                 yield return Destinations.IdentityToken;
                 break;
             case Claims.Email:

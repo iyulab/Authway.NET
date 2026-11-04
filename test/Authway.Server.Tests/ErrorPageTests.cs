@@ -71,4 +71,37 @@ public abstract partial class ServerTests
         var asked = await browser.GetAsync(new Uri(AuthorizeUrl(clientId, Pkce.New().Challenge, prompt: "none"), UriKind.Relative));
         Assert.Contains("error=consent_required", asked.Headers.Location!.OriginalString, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task TheDiscoveryDocument_AdvertisesTheClaimsOfTheContract_AndIsReadableFromAnyPage()
+    {
+        var response = await server.Client.GetAsync(new Uri("/.well-known/openid-configuration", UriKind.Relative));
+        var document = await BodyOfAsync(response);
+
+        Assert.Contains("*", response.Headers.GetValues("Access-Control-Allow-Origin"));
+        var claims = document.GetProperty("claims_supported").EnumerateArray().Select(c => c.GetString()).ToList();
+        foreach (var claim in new[] { "sub", "tenant_id", "email", "email_verified", "name", "auth_time", "amr" })
+        {
+            Assert.Contains(claim, claims);
+        }
+
+        Assert.DoesNotContain("client_secret_basic", document.GetProperty("token_endpoint_auth_methods_supported").EnumerateArray().Select(m => m.GetString()));
+        var alias = await server.Client.GetAsync(new Uri("/.well-known/oauth-authorization-server", UriKind.Relative));
+        Assert.Equal(await response.Content.ReadAsStringAsync(), await alias.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task TheTokens_SayWhichTenantThePersonBelongsTo_AndHowTheySignedIn()
+    {
+        var (application, address) = await RegisterApplicationAndPersonAsync();
+        var pkce = Pkce.New();
+        var tokens = await ExchangeAsync(application, await SignInAndGetCodeAsync(server.CreateClient(followRedirects: false), application, address, pkce), pkce.Verifier);
+
+        foreach (var name in new[] { "access_token", "id_token" })
+        {
+            var claims = Claims(tokens.Body.GetProperty(name).GetString()!);
+            Assert.Equal("00000000-0000-0000-0000-000000000001", claims.GetProperty("tenant_id").GetString());
+            Assert.Contains("pwd", claims.GetProperty("amr").EnumerateArray().Select(m => m.GetString()));
+        }
+    }
 }

@@ -95,6 +95,9 @@ builder.Services.AddOpenIddict()
     .AddCore(options => options.UseEntityFrameworkCore().UseDbContext<AuthwayDbContext>().ReplaceDefaultEntities<Guid>())
     .AddServer(options =>
     {
+        // The metadata is served where OpenID Connect Discovery has it and at the address of RFC 8414.
+        options.SetConfigurationEndpointUris(".well-known/openid-configuration", ".well-known/oauth-authorization-server");
+
         options.SetAuthorizationEndpointUris("connect/authorize")
                .SetTokenEndpointUris("connect/token")
                .SetUserInfoEndpointUris("connect/userinfo")
@@ -107,6 +110,18 @@ builder.Services.AddOpenIddict()
         options.RegisterScopes(Scopes.Email, Scopes.Profile, Scopes.OfflineAccess);
 
         ErrorPage.Add(options);
+
+        // What a token says, as the discovery document advertises it.
+        options.RegisterClaims(Claims.Subject, Identities.TenantId, Claims.Email, Claims.EmailVerified, Claims.Name, Claims.AuthenticationTime, Claims.AuthenticationMethodReference);
+
+        // A client proves itself with its secret in the form of the request, as the contract says: the metadata does
+        // not offer HTTP Basic. (It runs after the handlers that fill the document in.)
+        options.AddEventHandler<OpenIddict.Server.OpenIddictServerEvents.HandleConfigurationRequestContext>(builder =>
+            builder.UseInlineHandler(context =>
+            {
+                context.TokenEndpointAuthenticationMethods.Remove(ClientAuthenticationMethods.ClientSecretBasic);
+                return default;
+            }).SetOrder(int.MaxValue - 1));
 
         // A refresh token is used once: the one that was exchanged is not accepted again, not even for a
         // while (the default leeway lets a retry through, and a stolen token with it).
@@ -149,6 +164,17 @@ builder.Services.AddOpenIddict()
 var app = builder.Build();
 
 LoginUi.Use(app);
+
+// What describes this installation is readable from any page.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/.well-known", StringComparison.Ordinal))
+    {
+        context.Response.Headers.AccessControlAllowOrigin = "*";
+    }
+
+    await next();
+});
 
 app.UseRateLimiter();
 app.UseAuthentication();
