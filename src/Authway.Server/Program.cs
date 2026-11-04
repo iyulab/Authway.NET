@@ -92,6 +92,9 @@ if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue("Authw
 
 builder.Services.AddAuthorization();
 
+// Behind a proxy that ends TLS, the person's address comes from the proxy's headers — from the proxies named only.
+ProxyHeaders.Add(builder.Services);
+
 // A sign-in is checked against the account at every request that relies on it, not every half hour: ending
 // every session of a person (POST /api/v1/logout) takes effect at once.
 builder.Services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.Zero);
@@ -190,6 +193,8 @@ builder.Services.AddOpenIddict()
     });
 
 var app = builder.Build();
+
+ProxyHeaders.Use(app);
 
 LoginUi.Use(app);
 

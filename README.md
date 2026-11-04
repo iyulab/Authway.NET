@@ -31,6 +31,8 @@ The server reads its settings from configuration (environment variables use `__`
 | `Authway:Mail:From` | The sender's address. |
 | `Authway:Limits:SignInPerMinute` | How often one address may answer a sign-in (default 60). |
 | `Authway:Limits:MailRequestsPer15Minutes` | How often one address may ask for a verification or password-reset message (default 20). An account is also sent at most three of a kind in 15 minutes, whoever asks. |
+| `Authway:Proxy:ForwardedHeaders` | `true` when a reverse proxy that ends TLS (IIS, a load balancer, an ingress) sits in front: the server then takes the address the person used from `X-Forwarded-Proto`, `-Host` and `-For`, so the issuer and the redirects name that address and the server answers over the https the person used. Default `false`. |
+| `Authway:Proxy:KnownProxies`, `Authway:Proxy:KnownNetworks` | The proxies to believe, as addresses and as networks (`10.0.0.0/8`). Anyone can send those headers, so they are read only from these; with neither list, only a proxy on the same machine is believed. |
 | `Authway:Audit:RetentionDays` | How long audit entries are kept (default 365, at least 30); the ones past it are removed once a day. |
 
 An installation is one tenant. What it does not offer is said by `GET /api/v1/capabilities`, and a call for
