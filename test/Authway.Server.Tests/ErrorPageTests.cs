@@ -85,7 +85,11 @@ public abstract partial class ServerTests
             Assert.Contains(claim, claims);
         }
 
-        Assert.DoesNotContain("client_secret_basic", document.GetProperty("token_endpoint_auth_methods_supported").EnumerateArray().Select(m => m.GetString()));
+        // Only what a client can use is listed: a secret in the form, no HTTP Basic, no signed assertion.
+        Assert.Equal(["client_secret_post"], document.GetProperty("token_endpoint_auth_methods_supported").EnumerateArray().Select(m => m.GetString()));
+        Assert.False(document.TryGetProperty("token_endpoint_auth_signing_alg_values_supported", out _));
+        Assert.False(document.GetProperty("frontchannel_logout_supported").GetBoolean());
+        Assert.False(document.GetProperty("request_uri_parameter_supported").GetBoolean());
         var alias = await server.Client.GetAsync(new Uri("/.well-known/oauth-authorization-server", UriKind.Relative));
         Assert.Equal(await response.Content.ReadAsStringAsync(), await alias.Content.ReadAsStringAsync());
     }

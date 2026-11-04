@@ -31,6 +31,26 @@ public abstract partial class ServerTests
     }
 
     [Fact]
+    public async Task OnlyAcceptingAnInvitation_IsLimited_NotLookingOneUp()
+    {
+        var limited = server.CreateClientWith(new Dictionary<string, string?> { ["Authway:Limits:SignInPerMinute"] = "2" });
+
+        // Looking up an invitation or a receipt is not limited, as the contract lists no 429 for them.
+        for (var lookup = 0; lookup < 6; lookup++)
+        {
+            Assert.Equal(HttpStatusCode.NotFound, (await limited.GetAsync(new Uri("/api/v1/invitations/token/nobody", UriKind.Relative))).StatusCode);
+        }
+
+        using var accept = JsonContent.Create(new { token = "nobody", password = "a-long-enough-password", name = "Nobody" });
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, (await limited.PostAsync(new Uri("/api/v1/invitations/accept", UriKind.Relative), accept)).StatusCode);
+        }
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await limited.PostAsync(new Uri("/api/v1/invitations/accept", UriKind.Relative), accept)).StatusCode);
+    }
+
+    [Fact]
     public async Task OneAddress_MayAnswerSignInsOnlySoOften()
     {
         var limited = server.CreateClientWith(new Dictionary<string, string?> { ["Authway:Limits:SignInPerMinute"] = "3" });

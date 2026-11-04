@@ -115,11 +115,18 @@ builder.Services.AddOpenIddict()
         options.RegisterClaims(Claims.Subject, Identities.TenantId, Claims.Email, Claims.EmailVerified, Claims.Name, Claims.AuthenticationTime, Claims.AuthenticationMethodReference);
 
         // A client proves itself with its secret in the form of the request, as the contract says: the metadata does
-        // not offer HTTP Basic. (It runs after the handlers that fill the document in.)
+        // not offer HTTP Basic, nor a signed assertion — no client can be registered to use one, and discovery says
+        // only what a client can use. (It runs after the handlers that fill the document in.)
         options.AddEventHandler<OpenIddict.Server.OpenIddictServerEvents.HandleConfigurationRequestContext>(builder =>
             builder.UseInlineHandler(context =>
             {
                 context.TokenEndpointAuthenticationMethods.Remove(ClientAuthenticationMethods.ClientSecretBasic);
+                context.TokenEndpointAuthenticationMethods.Remove(ClientAuthenticationMethods.PrivateKeyJwt);
+                context.Metadata.Remove("token_endpoint_auth_signing_alg_values_supported");
+
+                // What this server does not do is said, not left out: no front-channel logout, no request objects by reference.
+                context.Metadata["frontchannel_logout_supported"] = false;
+                context.Metadata["request_uri_parameter_supported"] = false;
                 return default;
             }).SetOrder(int.MaxValue - 1));
 

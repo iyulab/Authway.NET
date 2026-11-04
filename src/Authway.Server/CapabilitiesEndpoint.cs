@@ -28,6 +28,8 @@ internal static class CapabilitiesEndpoint
             ["approval_requests"] = false,
             ["passkeys"] = false,
             ["breached_password_check"] = false,
+            ["webhooks"] = false,
+            ["client_provider_apps"] = false,
             ["ciba"] = false,
         }));
 }

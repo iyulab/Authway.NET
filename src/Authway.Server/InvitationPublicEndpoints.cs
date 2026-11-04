@@ -20,9 +20,11 @@ internal static class InvitationPublicEndpoints
 
     public static void Map(IEndpointRouteBuilder app)
     {
-        var invitations = app.MapGroup("/api/v1/invitations").RequireRateLimiting(SignInLimit.Policy);
+        // Only accepting is limited, as the contract lists: looking an invitation or a receipt up gives nothing to
+        // a guesser (the token is 256 random bits) and a screen reads them as often as it needs.
+        var invitations = app.MapGroup("/api/v1/invitations");
         invitations.MapGet("/token/{token}", ShowAsync);
-        invitations.MapPost("/accept", AcceptAsync);
+        invitations.MapPost("/accept", AcceptAsync).RequireRateLimiting(SignInLimit.Policy);
         invitations.MapGet("/token/{token}/social/{provider}", NoProvider);
         invitations.MapGet("/receipts/{id}", NoReceipt);
     }
