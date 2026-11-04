@@ -57,6 +57,32 @@ internal static class AdminRequest
         }
     }
 
+    /// <summary>
+    /// Reads a body that may be absent: no body at all, or only whitespace, is no body and no refusal.
+    /// A body that is there must be a JSON object, as in <see cref="ReadBodyAsync"/>.
+    /// </summary>
+    internal static async Task<(JsonElement? Body, IResult? Refusal)> ReadOptionalBodyAsync(HttpRequest request)
+    {
+        using var reader = new StreamReader(request.Body, leaveOpen: true);
+        var text = await reader.ReadToEndAsync();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                ? (document.RootElement.Clone(), null)
+                : (null, Refuse("invalid_request", "The body must be a JSON object."));
+        }
+        catch (JsonException)
+        {
+            return (null, Refuse("invalid_request", "The body is not valid JSON."));
+        }
+    }
+
     internal static IResult Refuse(string code, string detail, string? field = null) =>
         Problems.Refuse(StatusCodes.Status400BadRequest, code, detail, field: field);
 

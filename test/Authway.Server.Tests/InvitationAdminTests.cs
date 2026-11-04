@@ -81,6 +81,61 @@ public abstract partial class ServerTests
         Assert.False(string.IsNullOrEmpty(TokenIn(mail)));
     }
 
+    [Theory]
+    [InlineData("ko", null, "초대")]
+    [InlineData("ko-KR", null, "초대")]
+    [InlineData("en", "ko-KR,ko;q=0.9", "Invitation to")]
+    [InlineData(null, "ko-KR,ko;q=0.9", "초대")]
+    [InlineData(null, null, "Invitation to")]
+    [InlineData("", "ko", "초대")]
+    public async Task TheCall_MayNameTheLanguageOfTheEmail_AndItBeatsTheHeader(string? locale, string? acceptLanguage, string subject)
+    {
+        var recorder = new MailRecorder();
+        var admin = AdminClientRecording(recorder);
+        using var request = new HttpRequestMessage(HttpMethod.Post, Invitations) { Content = JsonContent.Create(new { email = NewAddress(), locale }) };
+        if (acceptLanguage is not null)
+        {
+            request.Headers.AcceptLanguage.ParseAdd(acceptLanguage);
+        }
+
+        Assert.Equal(HttpStatusCode.Created, (await admin.SendAsync(request)).StatusCode);
+
+        Assert.Contains(subject, Assert.Single(recorder.Sent).Message.Subject, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("fr")]
+    [InlineData("*")]
+    [InlineData("ko, en")]
+    public async Task ALanguageThereAreNoStringsFor_IsRefused_AndNothingIsCreatedOrMailed(string locale)
+    {
+        var recorder = new MailRecorder();
+        var admin = AdminClientRecording(recorder);
+
+        await AssertRefusedAsync(await admin.PostAsJsonAsync(Invitations, new { email = NewAddress(), locale }), HttpStatusCode.BadRequest, "invalid_request", "locale");
+        await AssertRefusedAsync(await admin.PostAsJsonAsync(Invitations, new { email = NewAddress(), locale = 7 }), HttpStatusCode.BadRequest, "invalid_request", "locale");
+
+        Assert.Empty(recorder.Sent);
+    }
+
+    [Fact]
+    public async Task AResend_MayNameTheLanguage_AndNeedsNoBody()
+    {
+        var recorder = new MailRecorder();
+        var admin = AdminClientRecording(recorder);
+        var id = await CreateInvitationAsync(admin);
+
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync(InvitationAt(id, "/resend"), new { locale = "ko" })).StatusCode);
+        Assert.Contains("초대", recorder.Sent.Last().Message.Subject, StringComparison.Ordinal);
+
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsync(InvitationAt(id, "/resend"), null)).StatusCode);
+        Assert.Contains("Invitation to", recorder.Sent.Last().Message.Subject, StringComparison.Ordinal);
+
+        var sent = recorder.Sent.Count;
+        await AssertRefusedAsync(await admin.PostAsJsonAsync(InvitationAt(id, "/resend"), new { locale = "fr" }), HttpStatusCode.BadRequest, "invalid_request", "locale");
+        Assert.Equal(sent, recorder.Sent.Count);
+    }
+
     [Fact]
     public async Task AnAddressThatIsAlreadyInvited_IsRefusedWhilePending()
     {

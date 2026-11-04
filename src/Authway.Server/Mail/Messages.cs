@@ -30,6 +30,24 @@ public static class Messages
     ];
 
     /// <summary>
+    /// Resolves a language a caller names outright — one tag, <c>ko</c> or <c>ko-KR</c> or <c>ko_KR</c> — to
+    /// the locale it stands for. Unlike <see cref="Negotiate"/> it does not fall back: a tag with no locale,
+    /// an empty tag, a list or a <c>*</c> gives <c>null</c>, so a caller that asked for a language is told
+    /// when there is none instead of being answered in another one.
+    /// </summary>
+    public static string? Pick(string? tag)
+    {
+        tag = (tag ?? string.Empty).Trim().ToLowerInvariant();
+        if (tag.Length == 0 || tag.IndexOfAny([',', ';', '*', ' ']) >= 0)
+        {
+            return null;
+        }
+
+        var language = tag.Replace('_', '-').Split('-')[0];
+        return Locales().Contains(language, StringComparer.Ordinal) ? language : null;
+    }
+
+    /// <summary>
     /// Picks the locale for a language preference: an Accept-Language header (<c>ko-KR,ko;q=0.9,en;q=0.8</c>),
     /// or a single tag a person chose (<c>ko</c>, <c>en-US</c>). The best-ranked tag whose language has a
     /// locale wins, so a region tag matches its language; a tag of weight 0 is refused, the way the header

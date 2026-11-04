@@ -67,6 +67,26 @@ public sealed class MailTests
         Assert.Equal(expected, Messages.Negotiate(preference));
     }
 
+    [Theory]
+    [InlineData("ko", "ko")]
+    [InlineData("en", "en")]
+    [InlineData("ko-KR", "ko")]
+    [InlineData("KO_kr", "ko")]
+    [InlineData(" en-US ", "en")]
+    [InlineData("fr", null)]
+    [InlineData("fr-FR", null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("*", null)]
+    [InlineData("ko, en", null)]
+    [InlineData("ko;q=0.9", null)]
+    [InlineData("garbage;;,,", null)]
+    [InlineData(null, null)]
+    public void ALanguageNamedOutright_IsALocale_OrNothing(string? tag, string? expected)
+    {
+        Assert.Equal(expected, Messages.Pick(tag));
+    }
+
     [Fact]
     public void ALinkThatIsNotAWebAddress_IsRefused()
     {

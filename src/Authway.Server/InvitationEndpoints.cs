@@ -106,6 +106,12 @@ internal static partial class InvitationEndpoints
             return Refuse("invalid_request", "A valid email address is required.", "email");
         }
 
+        var (locale, badLocale) = MailLocale(context, body.Value);
+        if (badLocale is not null)
+        {
+            return badLocale;
+        }
+
         var clientId = String(body.Value, "client_id");
         if (!string.IsNullOrEmpty(clientId) && await applications.FindByClientIdAsync(clientId) is null)
         {
@@ -143,7 +149,7 @@ internal static partial class InvitationEndpoints
         db.Invitations.Add(invitation);
         await db.SaveChangesAsync();
 
-        var mailed = await TryMailAsync(mail, invitation, token, context, configuration, logs);
+        var mailed = await TryMailAsync(mail, invitation, token, locale, context, configuration, logs);
         return Results.Json(
             new Dictionary<string, object>
             {
@@ -187,6 +193,18 @@ internal static partial class InvitationEndpoints
             return refusal;
         }
 
+        var (body, bad) = await ReadOptionalBodyAsync(context.Request);
+        if (bad is not null)
+        {
+            return bad;
+        }
+
+        var (locale, badLocale) = MailLocale(context, body);
+        if (badLocale is not null)
+        {
+            return badLocale;
+        }
+
         var now = time.GetUtcNow();
         if (StatusOf(invitation!, now) != Invitation.Pending)
         {
@@ -200,7 +218,7 @@ internal static partial class InvitationEndpoints
         invitation.UpdatedAt = now;
         await db.SaveChangesAsync();
 
-        var mailed = await TryMailAsync(mail, invitation, token, context, configuration, logs);
+        var mailed = await TryMailAsync(mail, invitation, token, locale, context, configuration, logs);
         return Results.Json(new { message = mailed ? "Invitation emailed again." : "A new link was made, but the email could not be sent." });
     }
 
@@ -247,14 +265,41 @@ internal static partial class InvitationEndpoints
     /// Mails the link, in the language the request asked for. A mail that cannot be sent does not undo
     /// the invitation — it can be sent again — but the answer says so.
     /// </summary>
-    private static async Task<bool> TryMailAsync(IMailSender mail, Invitation invitation, string token, HttpContext context, IConfiguration configuration, ILoggerFactory logs)
+    /// <summary>
+    /// The language an invitation email is written in: the one the call names (<c>locale</c> in its body),
+    /// else the one its Accept-Language asks for, else English. The one who invites knows the language of the
+    /// one invited; a server calling for an application sends no Accept-Language. A language there are no
+    /// strings for is refused, never answered in another.
+    /// </summary>
+    private static (string Locale, IResult? Refusal) MailLocale(HttpContext context, JsonElement? body)
+    {
+        var named = body is { } json && json.TryGetProperty("locale", out var value) ? value : default;
+        switch (named.ValueKind)
+        {
+            case JsonValueKind.Undefined or JsonValueKind.Null:
+                break;
+            case JsonValueKind.String when string.IsNullOrWhiteSpace(named.GetString()):
+                break;
+            case JsonValueKind.String:
+                return Messages.Pick(named.GetString()) is { } picked ? (picked, null) : (string.Empty, NotALanguage());
+            default:
+                return (string.Empty, NotALanguage());
+        }
+
+        return (Messages.Negotiate(context.Request.Headers.AcceptLanguage.ToString()), null);
+    }
+
+    private static IResult NotALanguage() =>
+        Refuse("invalid_request", $"locale must be one of: {string.Join(", ", Messages.Locales())}", "locale");
+
+    private static async Task<bool> TryMailAsync(IMailSender mail, Invitation invitation, string token, string locale, HttpContext context, IConfiguration configuration, ILoggerFactory logs)
     {
         try
         {
             var baseUrl = BootstrapConfig.UiAddress(context, configuration);
             var message = Messages.Render(
                 "invitation",
-                context.Request.Headers.AcceptLanguage.ToString(),
+                locale,
                 new Dictionary<string, object?>
                 {
                     ["link"] = $"{baseUrl}/invitation/accept?token={Uri.EscapeDataString(token)}",
