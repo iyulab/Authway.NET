@@ -19,7 +19,7 @@ public sealed class MemoryFlowStore(TimeProvider time) : IFlowStore
     /// <summary>How long an id is remembered after the flow ended.</summary>
     private static readonly TimeSpan Remembered = TimeSpan.FromHours(1);
 
-    private sealed record Entry(Flow Flow, bool Completed, int Failures = 0);
+    private sealed record Entry(Flow Flow, bool Completed, int Failures = 0, string? SignedInAs = null, DateTimeOffset? SignedInAt = null);
 
     private readonly ConcurrentDictionary<string, Entry> _flows = new();
 
@@ -67,6 +67,63 @@ public sealed class MemoryFlowStore(TimeProvider time) : IFlowStore
         }
     }
 
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _holds = new();
+
+    public async Task<IDisposable> HoldAsync(string id)
+    {
+        // Only a flow that exists has a hold: an id someone made up costs nothing.
+        if (!_flows.ContainsKey(id))
+        {
+            return NoHold.Instance;
+        }
+
+        var gate = _holds.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        return new Hold(gate);
+    }
+
+    private sealed class Hold(SemaphoreSlim gate) : IDisposable
+    {
+        public void Dispose() => gate.Release();
+    }
+
+    private sealed class NoHold : IDisposable
+    {
+        public static readonly NoHold Instance = new();
+
+        public void Dispose()
+        {
+        }
+    }
+
+    public void SignedIn(string id, string subject)
+    {
+        if (_flows.TryGetValue(id, out var entry))
+        {
+            _flows[id] = entry with { Completed = true, SignedInAs = subject, SignedInAt = time.GetUtcNow() };
+        }
+    }
+
+    public bool TryFindSignedIn(string id, out Flow? flow, out string? subject)
+    {
+        flow = null;
+        subject = null;
+        if (!_flows.TryGetValue(id, out var entry)
+            || entry.Flow.Kind != FlowKind.Login
+            || entry.SignedInAs is null
+            || entry.SignedInAt is not { } at
+            || time.GetUtcNow() - at >= IFlowStore.SignInRemembered
+            // Guessing at the flow is capped here as it is while the flow is open.
+            || entry.Failures >= IFlowStore.MaxFailures)
+        {
+            return false;
+        }
+
+        flow = entry.Flow;
+        subject = entry.SignedInAs;
+        return true;
+    }
+
     public bool Fail(string id)
     {
         var ended = false;
@@ -90,6 +147,7 @@ public sealed class MemoryFlowStore(TimeProvider time) : IFlowStore
             if (entry.Flow.ExpiresAt < cutoff)
             {
                 _flows.TryRemove(id, out _);
+                _holds.TryRemove(id, out _);
             }
         }
     }

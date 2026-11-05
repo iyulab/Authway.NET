@@ -44,6 +44,55 @@ public abstract partial class ServerTests
     }
 
     [Fact]
+    public async Task ASignInFlow_SubmittedAgain_IsTheSameSignIn_AndIsWrittenDownOnce()
+    {
+        // The screen stays up while the browser follows the redirect, so the same flow is answered twice.
+        var admin = AdminClient(AdminKey);
+        var (application, address) = await RegisterApplicationAndPersonAsync();
+        var (_, otherAddress) = await RegisterApplicationAndPersonAsync();
+        var browser = server.CreateClient(followRedirects: false);
+        var flow = await StartAsync(browser, application, Pkce.New().Challenge);
+        var path = new Uri($"/api/v1/login-flows/{flow}/password", UriKind.Relative);
+
+        var first = await browser.PostAsJsonAsync(path, new { email = address, password = Password });
+        var again = await browser.PostAsJsonAsync(path, new { email = address, password = Password });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        Assert.Equal(await first.Content.ReadAsStringAsync(), await again.Content.ReadAsStringAsync());
+
+        // Asking again proves who you are again, and the flow belongs to the person it signed in.
+        var wrong = await browser.PostAsJsonAsync(path, new { email = address, password = "not-the-password" });
+        Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
+        var someoneElse = await browser.PostAsJsonAsync(path, new { email = otherAddress, password = Password });
+        Assert.Equal(HttpStatusCode.Unauthorized, someoneElse.StatusCode);
+        var anotherPassword = await browser.PostAsJsonAsync(path, new { email = otherAddress, password = "not-the-password" });
+        Assert.Equal(await someoneElse.Content.ReadAsStringAsync(), await anotherPassword.Content.ReadAsStringAsync());
+
+        var userId = Assert.Single(await AuditEntriesAsync(admin, "action=user.login_failed&success=false&limit=1000"), e => e.GetProperty("actor_email").GetString() == address).GetProperty("actor_id").GetString()!;
+        Assert.Single(await AuditEntriesAsync(admin, $"action=user.login&actor_id={userId}"));
+    }
+
+    [Fact]
+    public async Task ASignInFlow_SubmittedAtOnce_IsOneSignIn()
+    {
+        var admin = AdminClient(AdminKey);
+        var (application, address) = await RegisterApplicationAndPersonAsync();
+        var browser = server.CreateClient(followRedirects: false);
+        var flow = await StartAsync(browser, application, Pkce.New().Challenge);
+        var path = new Uri($"/api/v1/login-flows/{flow}/password", UriKind.Relative);
+
+        var answers = await Task.WhenAll(Enumerable.Range(0, 6).Select(async _ =>
+        {
+            var response = await browser.PostAsJsonAsync(path, new { email = address, password = Password });
+            return (response.StatusCode, Body: await response.Content.ReadAsStringAsync());
+        }));
+
+        Assert.All(answers, a => Assert.Equal(HttpStatusCode.OK, a.StatusCode));
+        Assert.Single(answers.Select(a => a.Body).Distinct());
+        Assert.Single(await AuditEntriesAsync(admin, "action=user.login&limit=1000"), e => e.GetProperty("actor_email").GetString() == address);
+    }
+
+    [Fact]
     public async Task ASignIn_IsWrittenDown_WhetherItWorkedOrNot()
     {
         var admin = AdminClient(AdminKey);

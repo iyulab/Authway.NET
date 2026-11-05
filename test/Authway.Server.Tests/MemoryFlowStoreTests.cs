@@ -101,6 +101,38 @@ public class MemoryFlowStoreTests
     }
 
     [Fact]
+    public void ASignedInFlow_IsRememberedForWhomItSignedIn_UntilItRunsOutOrIsGuessedAt()
+    {
+        var clock = new Clock();
+        var store = new MemoryFlowStore(clock);
+        var opened = Open(store);
+
+        Assert.False(store.TryFindSignedIn(opened.Id, out _, out _), "an open flow was signed in by no one");
+        store.SignedIn(opened.Id, "person");
+        Assert.Equal(FlowState.Expired, store.Find(opened.Id, FlowKind.Login, out _));
+        Assert.True(store.TryFindSignedIn(opened.Id, out var flow, out var subject));
+        Assert.Equal(opened, flow);
+        Assert.Equal("person", subject);
+
+        var other = Open(store);
+        store.Complete(other.Id);
+        Assert.False(store.TryFindSignedIn(other.Id, out _, out _), "a flow completed any other way signed in no one");
+
+        // Guessing at a signed-in flow ends as it does at an open one.
+        for (var i = 0; i < IFlowStore.MaxFailures; i++)
+        {
+            store.Fail(opened.Id);
+        }
+
+        Assert.False(store.TryFindSignedIn(opened.Id, out _, out _));
+
+        var later = Open(store);
+        store.SignedIn(later.Id, "person");
+        clock.Advance(IFlowStore.SignInRemembered);
+        Assert.False(store.TryFindSignedIn(later.Id, out _, out _));
+    }
+
+    [Fact]
     public void EveryFlowGetsAnIdOfItsOwn()
     {
         var store = new MemoryFlowStore(new Clock());

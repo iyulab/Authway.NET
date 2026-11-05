@@ -83,8 +83,15 @@ internal static class LoginFlowEndpoints
         IOpenIddictApplicationManager applications,
         AuditTrail audit)
     {
+        // Submits of one flow that overlap are taken one after the other: the second finds what the first did.
+        using var hold = await store.HoldAsync(flow);
         var state = store.Find(flow, FlowKind.Login, out var open);
-        if (state != FlowState.Open)
+
+        // The sign-in screen stays up while the browser follows the redirect, so a flow that was signed in is
+        // answered again for the person it signed in, once they prove who they are again: a second click is the same sign-in.
+        string? signedInAs = null;
+        var again = state == FlowState.Expired && store.TryFindSignedIn(flow, out open, out signedInAs);
+        if (state != FlowState.Open && !again)
         {
             return state == FlowState.Unknown ? Problems.UnknownFlow() : Problems.ExpiredFlow();
         }
@@ -113,6 +120,17 @@ internal static class LoginFlowEndpoints
             return InvalidCredentials();
         }
 
+        // A flow that was signed in belongs to the person it signed in. A password for anyone else's account is
+        // not checked, so the answer cannot say whether it was right: it is refused as a wrong one is.
+        if (again && user.Id.ToString() != signedInAs)
+        {
+            hasher.VerifyHashedPassword(NoAccount, NoAccountHash.Value(hasher), body.Password);
+            store.Fail(flow);
+            await audit.RecordAsync(context, AuditActions.UserLoginFailed, "user", user.Id.ToString(), success: false, severity: AuditTrail.Warning,
+                error: "flow of another user", actorId: user.Id, actorEmail: user.Email);
+            return InvalidCredentials();
+        }
+
         var result = await signIn.CheckPasswordSignInAsync(user, body.Password, lockoutOnFailure: true);
         if (!result.Succeeded)
         {
@@ -130,8 +148,14 @@ internal static class LoginFlowEndpoints
             return Problems.Refuse(StatusCodes.Status403Forbidden, "account_suspended", "This account has been suspended.");
         }
 
+        if (again)
+        {
+            // The person the flow signed in, proved again; the sign-in itself, and its record, are not repeated.
+            return Results.Json(new Redirect("redirect", open!.ContinueTo), LoginFlowJson.Options);
+        }
+
         await signIn.SignInAsync(user, AuthTime.Of(body.Remember, time.GetUtcNow()));
-        store.Complete(flow);
+        store.SignedIn(flow, user.Id.ToString());
         await audit.RecordAsync(context, AuditActions.UserLogin, "user", user.Id.ToString(), actorId: user.Id, actorEmail: user.Email);
         return Results.Json(new Redirect("redirect", open!.ContinueTo), LoginFlowJson.Options);
     }

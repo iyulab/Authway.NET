@@ -77,6 +77,28 @@ public interface IFlowStore
     void Complete(string id);
 
     /// <summary>
+    /// Ends a login flow as <see cref="Complete"/> does and remembers whom it signed in, for
+    /// <see cref="SignInRemembered"/>: the sign-in screen stays up while the browser leaves, so the
+    /// same person may answer the flow again.
+    /// </summary>
+    void SignedIn(string id, string subject);
+
+    /// <summary>
+    /// The login flow a sign-in completed, and whom it signed in, while it is still remembered.
+    /// False for a flow that is open, ended any other way, or no longer remembered.
+    /// </summary>
+    bool TryFindSignedIn(string id, out Flow? flow, out string? subject);
+
+    /// <summary>
+    /// Holds the flow for one answer at a time: submits of the same flow that overlap are taken one after the
+    /// other, so that the second finds what the first did. Dispose to let go. An id that is not a flow holds nothing.
+    /// </summary>
+    Task<IDisposable> HoldAsync(string id);
+
+    /// <summary>How long a completed sign-in answers the same person again.</summary>
+    static readonly TimeSpan SignInRemembered = TimeSpan.FromMinutes(10);
+
+    /// <summary>
     /// Counts a failed answer to the flow. Past <see cref="MaxFailures"/> the flow ends, as if completed:
     /// whoever is guessing has to start again from the application. Returns whether the flow ended.
     /// </summary>
