@@ -12,6 +12,7 @@
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.14" />
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.14" />
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.7.2" />
     <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.7.2" />
     <!-- Transitive packages pinned above the version a dependency asks for, because that one has a known vulnerability -->

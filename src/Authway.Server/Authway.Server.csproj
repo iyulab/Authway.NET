@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Authway.Data.Postgres\Authway.Data.Postgres.csproj" />
     <ProjectReference Include="..\Authway.Data.SqlServer\Authway.Data.SqlServer.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
     <PackageReference Include="OpenIddict.AspNetCore" />
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
   </ItemGroup>

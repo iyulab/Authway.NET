@@ -44,8 +44,15 @@ something it does not offer is refused with the code the contract names.
 (`hostingModel="inprocess"`, ASP.NET Core Module; an IIS installation has not been exercised in this
 repository's tests). Behind a proxy that ends TLS and forwards to the server — a load balancer, an ingress,
 nginx — set
-`Authway:Proxy:ForwardedHeaders` and name the proxies (see above). Run as a Windows Service is not supported
-yet: the server does not speak the service control protocol.
+`Authway:Proxy:ForwardedHeaders` and name the proxies (see above).
+
+The server runs as a Windows Service: started by the service control manager it speaks the service control
+protocol, takes the directory of its files as the content root (so `appsettings.json` next to it is read) and
+logs to the event log; started any other way it behaves as before. Publish it and register the published
+executable, for example `sc.exe create Authway binPath= "C:\Authway\Authway.Server.exe" start= auto` — the
+service name is `Authway`. Give the service its settings as machine environment variables or in
+`appsettings.Production.json` next to the executable. A service installation has not been exercised in this
+repository's tests.
 
 ## Conformance
 

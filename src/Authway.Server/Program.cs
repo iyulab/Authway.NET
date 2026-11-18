@@ -11,6 +11,11 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Started by the Windows service control manager, the server speaks its protocol (start, stop, the
+// content root at the install directory, the event log); started any other way — a console, IIS,
+// a container, the tests — this does nothing.
+builder.Host.UseWindowsService(options => options.ServiceName = "Authway");
+
 // The database is read when the context is first built, not here: a host that
 // is started with its configuration supplied afterwards (the integration tests)
 // is then configured the same way as one that reads it from the start.
